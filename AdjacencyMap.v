@@ -4,7 +4,9 @@ Require Import Coq.FSets.FMapInterface.
 
 Require Import Coq.FSets.FSetProperties.
 
-Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterface.Sfun O).
+Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterface.Sfun O) <: (Graph O S).
+
+  Import Graph.
 
   Module P := FSetProperties.WProperties_fun O S.
 
@@ -67,6 +69,55 @@ Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterfa
     assert ( M.MapsTo u (S.add v x) (M.add u (S.add v x) g)). { 
     apply M.add_1. reflexivity. } apply M.find_1 in H1. rewrite H1.
     apply S.mem_1. apply S.add_1. reflexivity.
+  Qed.
+
+  Lemma add_edge_2: forall g u v a b,
+    contains_edge g a b = true ->
+    contains_edge (add_edge g u v) a b = true.
+  Proof.
+    intros. unfold contains_edge in *. unfold add_edge. destruct (M.find a g) eqn : ?.
+    - destruct (M.find u g) eqn : ?.
+      + destruct (O.eq_dec a u) eqn : ?.
+        * setoid_rewrite e. setoid_rewrite e in Heqo.
+          rewrite Heqo0 in Heqo. inversion Heqo; subst.
+          assert (M.MapsTo u (S.add v t) (M.add u (S.add v t) g)). apply M.add_1. reflexivity.
+          apply M.find_1 in H0. rewrite H0. apply S.mem_1. apply S.mem_2 in H.
+          apply S.add_2. apply H.
+        * assert (M.MapsTo a t (M.add u (S.add v t0) g)). apply M.add_2. intro. subst.
+          apply n. apply eq_refl. apply M.find_2. apply Heqo. apply M.find_1 in H0.
+          rewrite H0. apply H.
+      + rewrite Heqo. apply H.
+  - inversion H.
+  Qed. 
+
+  Lemma add_edge_3: forall g u v a b,
+    u <> a \/ v <> b ->
+    (contains_edge g a b = contains_edge (add_edge g u v) a b).
+  Proof.
+    intros. unfold contains_edge. unfold add_edge. destruct (M.find u g) eqn : ?.
+    - destruct (M.find a g) eqn : ?.
+      + destruct (O.eq_dec u a).
+        * setoid_rewrite e. setoid_rewrite e in Heqo. rewrite Heqo0 in Heqo.
+          inversion Heqo; subst. assert (M.MapsTo a (S.add v t) (M.add a (S.add v t) g)).
+          apply M.add_1. reflexivity. apply M.find_1 in H0. rewrite H0.
+          destruct (S.mem b t) eqn : ?.
+          -- symmetry. rewrite <- P.Dec.F.mem_iff. apply S.add_2. 
+             apply S.mem_2. apply Heqb0.
+          -- symmetry. rewrite <- P.FM.not_mem_iff. rewrite <- P.FM.not_mem_iff in Heqb0.
+             intro. rewrite P.Dec.F.add_iff in H1. destruct H1.
+              ++ subst. destruct H. setoid_rewrite e in H. contradiction. contradiction.
+              ++ contradiction.
+        * assert (M.MapsTo a t0 (M.add u (S.add v t) g)). apply M.add_2. intro.
+          subst. apply n. apply eq_refl. apply M.find_2. apply Heqo0. apply M.find_1 in H0.
+          rewrite H0. reflexivity.
+      + destruct (O.eq_dec u a).
+        * setoid_rewrite e in Heqo. rewrite Heqo0 in Heqo. inversion Heqo.
+        * destruct (M.find a (M.add u (S.add v t) g)) eqn : ?.
+          -- apply M.find_2 in Heqo1. apply M.add_3 in Heqo1.
+            erewrite M.find_1 in Heqo0. inversion Heqo0. apply Heqo1. intro.
+            subst. apply n. apply eq_refl.
+          -- reflexivity.
+   - reflexivity.
   Qed.
 
   Lemma neighbors_list_1: forall g v,
@@ -199,6 +250,7 @@ Qed.
         + apply P.FM.add_iff. destruct H. left. apply H. right. apply IHl. apply H. }
         rewrite list_of_graph_1. rewrite H. reflexivity.
   Qed. 
+
 
 End AdjacencyMap.
       

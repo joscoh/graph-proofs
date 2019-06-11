@@ -4,6 +4,7 @@ Require Export Coq.FSets.FSetInterface.
 
 Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
 
+
   Parameter graph: Type.
 
   Definition vertex := O.t.
@@ -33,6 +34,14 @@ Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
     contains_vertex g u = true ->
     contains_edge (add_edge g u v) u v = true.
 
+  Parameter add_edge_2: forall g u v a b,
+    contains_edge g a b = true ->
+    contains_edge (add_edge g u v) a b = true.
+
+  Parameter add_edge_3: forall g u v a b,
+    u <> a \/ v <> b ->
+    (contains_edge g a b = contains_edge (add_edge g u v) a b).
+
   Parameter neighbors_list_1: forall g v,
     contains_vertex g v = false <-> neighbors_list g v = None.
 
@@ -60,7 +69,6 @@ Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
   Parameter set_of_graph_1: forall g v,
     contains_vertex g v = true <-> S.In v (set_of_graph g).
 
-  
 
 End Graph.
 
