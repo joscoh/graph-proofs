@@ -3,17 +3,21 @@ Require Import Graph.
 Require Import Coq.FSets.FMapInterface.
 
 Require Import Coq.FSets.FSetProperties.
+Require Import Coq.FSets.FMapFacts.
 
 Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterface.Sfun O) <: (Graph O S).
 
   Import Graph.
 
   Module P := FSetProperties.WProperties_fun O S.
+  Module P' := FMapFacts.WProperties_fun O M.
 
   (*We represent graphs as a map from vertices to sets of edges (neighbors)*)
   Definition graph := M.t (S.t).
 
   Definition vertex := O.t.
+
+  Definition empty : graph := (M.empty S.t).
 
   Definition contains_vertex (g: graph)(v: vertex) : bool := M.mem v g.
 
@@ -52,12 +56,35 @@ Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterfa
     fold_right (fun x t => S.add x t) S.empty (list_of_graph g).
 
 (*Theories*)
+
+  Lemma empty_1: forall v,
+    contains_vertex empty v = false.
+  Proof.
+   intros. unfold contains_vertex. unfold empty. apply P'.F.empty_a.
+  Qed.
+
+  Lemma empty_2: forall u v,
+    contains_edge empty u v = false.
+  Proof.
+    intros. unfold contains_edge. unfold empty. rewrite P'.F.empty_o. reflexivity.
+  Qed.
+
   Lemma add_vertex_1: forall g v,
     contains_vertex (add_vertex g v) v = true.
   Proof.
     intros. unfold contains_vertex. unfold add_vertex. apply M.mem_1. unfold M.In.
     exists S.empty. apply M.add_1. reflexivity.
   Qed. 
+
+  Lemma contains_edge_1: forall g u v,
+    contains_edge g u v = true ->
+    contains_vertex g u = true.
+  Proof.
+    intros. unfold contains_vertex. unfold contains_edge in H.
+    destruct (M.find u g) eqn : ?.
+    - rewrite P'.F.mem_find_b. rewrite Heqo. reflexivity.
+    - inversion H.
+  Qed.
 
   Lemma add_edge_1: forall g u v,
     contains_vertex g v = true ->

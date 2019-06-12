@@ -1,7 +1,7 @@
 Require Export Graph.
 
 Require Export Path.
-
+(*TODO: maybe extend graph instead of providing function*)
 
 Module Type Tree(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
 
@@ -13,7 +13,7 @@ Module Type Tree(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
   
   Parameter empty : tree.
 
-  Parameter singleton: tree.
+  Parameter singleton: vertex -> tree.
 
   Parameter root: tree -> option vertex.
 
@@ -33,7 +33,7 @@ Module Type Tree(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
 
   Definition is_ancestor t u v := is_descendent t v u.
 
-  Parameter equal: tree -> tree -> bool.
+  (*Parameter equal: tree -> tree -> bool.*)
 
   
   Parameter add_child_1: forall t u v,
@@ -45,9 +45,9 @@ Module Type Tree(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
     is_child t u v = true ->
     is_child (add_child t a b) u v = true.
 
-  Parameter add_child_3: forall t u v,
+  (*Parameter add_child_3: forall t u v,
     contains_vertex t v = true ->
-    equal (add_child t u v) t = true.
+    equal (add_child t u v) t = true.*)
 
   Parameter add_child_4: forall t u v,
     contains_vertex t v = true ->
@@ -69,7 +69,7 @@ Module Type Tree(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
 
   Parameter tree_to_graph_3: forall t,
     P.acyclic (tree_to_graph t).
-
+(*might need equal lemma to ensure it is acyclic but we will see*)
 End Tree.
      
      

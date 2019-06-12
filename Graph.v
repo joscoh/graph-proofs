@@ -7,6 +7,8 @@ Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
 
   Parameter graph: Type.
 
+  Parameter empty : graph.
+
   Definition vertex := O.t.
 
   Parameter contains_vertex: graph -> vertex -> bool.
@@ -25,9 +27,18 @@ Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
 
   Parameter set_of_graph: graph -> S.t.
 
+  Parameter empty_1: forall v,
+    contains_vertex empty v = false.
+
+  Parameter empty_2: forall u v,
+    contains_edge empty u v = false.
   
   Parameter add_vertex_1: forall g v,
     contains_vertex (add_vertex g v) v = true.
+
+  Parameter contains_edge_1: forall g u v,
+    contains_edge g u v = true ->
+    contains_vertex g u = true.
 
   Parameter add_edge_1: forall g u v,
     contains_vertex g v = true ->
