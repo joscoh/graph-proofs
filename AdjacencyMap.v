@@ -4,7 +4,7 @@ Require Import Coq.FSets.FMapInterface.
 
 Require Import Coq.FSets.FSetProperties.
 Require Import Coq.FSets.FMapFacts.
-
+(*TODO: Fix the edge stuff to ensure that both vertices are there*)
 Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterface.Sfun O) <: (Graph O S).
 
   Import Graph.
@@ -86,6 +86,16 @@ Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterfa
     - inversion H.
   Qed.
 
+  Lemma contains_edge_2: forall g u v,
+    contains_edge g u v = true ->
+    contains_vertex g v = true.
+  Proof.
+    intros. unfold contains_vertex. unfold contains_edge in H.
+    destruct (M.find u g) eqn : ?.
+    - rewrite P'.F.mem_find_b. rewrite Heqo. reflexivity.
+    - inversion H.
+  Qed.
+
   Lemma add_edge_1: forall g u v,
     contains_vertex g v = true ->
     contains_vertex g u = true ->
@@ -158,18 +168,6 @@ Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterfa
       apply M.mem_2 in Heqb. unfold M.In in Heqb. destruct Heqb.
       apply M.find_1 in H0. rewrite H0 in Heqo. inversion Heqo. reflexivity.
 Qed.
-
-  Lemma In_InA_equiv: forall (x: O.t) l,
-    In x l <-> InA eq x l.
-  Proof.
-    intros. induction l.
-    - simpl. split; intros. 
-      + destruct H.
-      + apply InA_nil in H. destruct H.
-    - simpl. split; intros.
-      + apply InA_cons. destruct H. left. subst. reflexivity. right. apply IHl. assumption.
-      + apply InA_cons in H. destruct H. left. subst. reflexivity. right. apply IHl. assumption.
-  Qed.
 
   Lemma neighbors_list_2: forall g u v l,
     neighbors_list g u = Some l ->

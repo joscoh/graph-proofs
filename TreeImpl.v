@@ -1,7 +1,7 @@
 (*A rose tree-like implementation of the Tree interface*)
 Require Import Tree.
 
-Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S) <: (Tree O S G).
+Module RoseTree(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S) <: (Tree O S G).
 
   Import G.
 
@@ -140,9 +140,21 @@ End nempty_tree_ind'.
 
   (*Theories*)
 
-  Parameter add_child_1: forall t u v,
+  Lemma tree_to_graph_1: forall t u,
+    contains_vertex t u = true <-> G.contains_vertex (tree_to_graph t) u = true.
+  Proof.
+    intros. destruct t.
+    - simpl. split; intros.
+      + eapply nempty_tree_ind'.
+        * intros. unfold add_nempty_tree_to_graph. simpl.
+
+  Lemma add_child_1: forall t u v,
     contains_vertex t u = true ->
     contains_vertex t v = false ->
     is_child (add_child t u v) u v = true.
+  Proof.
+    intros. destruct t.
+    - simpl in *. eapply nempty_tree_ind'.
+      + intros. unfold is_child_nempty.
 
 

@@ -40,6 +40,10 @@ Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
     contains_edge g u v = true ->
     contains_vertex g u = true.
 
+  Parameter contains_edge_2: forall g u v,
+    contains_edge g u v = true ->
+    contains_vertex g v = true.
+
   Parameter add_edge_1: forall g u v,
     contains_vertex g v = true ->
     contains_vertex g u = true ->

@@ -3,15 +3,15 @@ Require Export Graph.
 Require Export Path.
 (*TODO: maybe extend graph instead of providing function*)
 
-Module Type Tree(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
+Module Type Tree(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O Sg).
 
-  Module P := (Path.PathTheories O S G).
+  Module P := (Path.PathTheories O Sg G).
 
   Parameter tree : Type.
 
   Definition vertex := O.t.
   
-  Parameter empty : tree.
+  (*Parameter empty : tree.*)
 
   Parameter singleton: vertex -> tree.
 
@@ -44,6 +44,22 @@ Module Type Tree(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
   Parameter add_child_2: forall t u v a b,
     is_child t u v = true ->
     is_child (add_child t a b) u v = true.
+
+  Parameter singleton_1: forall v,
+    root (singleton v) = Some v.
+
+  Parameter root_1: forall t u v r,
+    root t = Some r <->
+    root (add_child t u v) = Some r.
+
+  Parameter root_2: forall t,
+    root t = None <-> forall v, contains_vertex t v = false.
+
+  (*Parameter empty_1: forall v,
+    contains_vertex empty v = false.
+
+  Parameter empty_2: forall u v,
+    is_child empty u v = false.*)
 
   (*Parameter add_child_3: forall t u v,
     contains_vertex t v = true ->
