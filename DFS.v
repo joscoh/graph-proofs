@@ -308,7 +308,7 @@ Proof.
     simpl in H0. destruct (S.mem a0 r). simpl in H0. destruct H0. inversion H0; subst. left. reflexivity.
     right. apply IHl. apply H0. right. apply IHl. apply H0. }
     apply H0 in H. rewrite In_InA_equiv in H. apply S.elements_2 in H.
-     Search G.neighbors_set. rewrite <- G.neighbors_set_2 in H.
+    rewrite <- G.neighbors_set_2 in H.
     eapply G.contains_edge_2. apply H. apply Heqo.
   - simpl in H. destruct H.
 Qed. 
@@ -445,6 +445,61 @@ Proof.
     apply H. apply H0. apply H1.
 Qed. 
 
+(** ** Results about finish times **)
+
+(*The analogues of the results for discovery times TODO: finish*)
+Lemma finished_vertex_not_remaining: forall s g o v,
+  valid_dfs_state s g o ->
+  G.contains_vertex g v = true ->
+  (exists n, (M.find v (get_f_times s) = Some n)) <-> S.mem v (get_remain_f s) = false.
+Proof.
+  intros. generalize dependent v. induction H; subst; simpl; intros; split; intros.
+  - rewrite P.F.empty_o in H. inversion H. inversion H1.
+  - rewrite G.set_of_graph_1 in H0. apply S.mem_1 in H0. rewrite H in H0. inversion H0.
+  - inversion H0; subst; simpl in *; try (apply IHvalid_dfs_state; assumption; assumption).
+    + destruct (O.eq_dec x v).
+      * setoid_rewrite e. setoid_rewrite e in H2. rewrite P2.Dec.F.remove_b.
+        rewrite andb_false_iff. right. unfold P2.Dec.F.eqb. 
+        destruct (O.eq_dec v v). reflexivity. exfalso. apply n. apply eq_refl.
+      * rewrite P2.FM.remove_neq_b. rewrite <- IHvalid_dfs_state. 
+        rewrite P.F.add_neq_o in H2. apply H2. intro. subst. apply n.
+        apply eq_refl. apply H1. intro. subst. apply n. apply eq_refl.
+  - inversion H0; subst; simpl in *; try (apply IHvalid_dfs_state; assumption; assumption).
+    + destruct (O.eq_dec x v).
+      * setoid_rewrite e. exists time. apply P.F.add_eq_o. reflexivity.
+      * rewrite P2.Dec.F.remove_neq_b in H2. rewrite <- IHvalid_dfs_state in H2.
+        rewrite P.F.add_neq_o. apply H2. auto.
+        apply H1. auto.
+Qed.
+
+(*remain_d always contains only vertices in the graph g*)
+Lemma remain_f_contains_valid_vertices: forall s g o v,
+  valid_dfs_state s g o ->
+  S.mem v (get_remain_f s) = true ->
+  G.contains_vertex g v = true.
+Proof.
+  intros. generalize dependent v. induction H; intros.
+  - simpl in H0. rewrite G.set_of_graph_1. apply S.mem_2. apply H0.
+  - inversion H0; subst; simpl in *; try (apply IHvalid_dfs_state; assumption).
+    + rewrite P2.Dec.F.remove_b in H1. rewrite andb_true_iff in H1. destruct H1.
+      unfold P2.Dec.F.eqb in H4. destruct (O.eq_dec x v). inversion H4.
+      apply IHvalid_dfs_state. apply H1.
+Qed.
+
+Lemma finished_vertices_in_graph: forall s g o v n,
+  valid_dfs_state s g o ->
+  M.find v (get_f_times s) = Some n ->
+  G.contains_vertex g v = true.
+Proof.
+  intros. generalize dependent n. induction H; intros.
+  - simpl in H0. rewrite F.empty_o in H0. inversion H0.
+  - inversion H0; subst; simpl in *; try (eapply IHvalid_dfs_state; apply H1).
+    destruct (O.eq_dec x v).
+      * eapply remain_f_contains_valid_vertices. apply H.
+      simpl. setoid_rewrite <- e. apply H3.
+      * rewrite F.add_neq_o in H1. eapply IHvalid_dfs_state. apply H1.
+        auto.
+Qed.
 (** ** The done condition **)
 
 (*We are done if there are no more vertices to discover or finish*)
@@ -469,7 +524,7 @@ Proof.
       apply S.mem_2. apply H0.
     + assert (x <> x0). intro. subst. rewrite P2.FM.remove_b in H0. rewrite andb_true_iff in H0.
       destruct H0. unfold P2.FM.eqb in H3. destruct (O.eq_dec x0 x0). inversion H3. apply n.
-      apply eq_refl. Search S.remove. rewrite P2.Dec.F.remove_neq_b in H0. apply IHvalid_dfs_state.
+      apply eq_refl. rewrite P2.Dec.F.remove_neq_b in H0. apply IHvalid_dfs_state.
       apply H0. auto.
     + assert (x <> x0). intro. subst. rewrite H2 in H0. inversion H0. rewrite P2.Dec.F.remove_neq_b.
       apply IHvalid_dfs_state. apply H0. auto.
@@ -534,6 +589,15 @@ Ltac empty_set_mem :=
       try(apply H); try(apply H1)
     end
   end.
+
+Ltac prove_set_empty :=
+  match goal with
+  | [H: S.mem _ ?s = true |- S.is_empty ?s = false] => destruct (S.is_empty s) eqn : A; try (empty_set_mem);
+    try (reflexivity)
+  end.
+
+Ltac solve_set_empty :=
+  try (empty_set_mem); try (prove_set_empty).
 
 Lemma add_to_stack_adds_parent: forall v g r x y,
   In (x,y) (add_to_stack v g r) ->
@@ -707,6 +771,431 @@ intros. apply S.equal_2. destruct (S.equal (get_remain_d s) (get_remain_f s)) eq
     apply P2.FM.mem_iff in Heqb. contradiction. eapply vertices_not_finished_on_stack in Heqb.
     rewrite H0 in Heqb. destruct Heqb. simpl in H3. destruct H3. apply H. apply H2.
 Qed.
+
+Lemma contrapositive: forall (P Q: Prop),
+  (P -> Q) -> (~Q -> ~P).
+Proof.
+  intros. intro. apply H in H1. contradiction.
+Qed.
+
+Lemma contra_bool: forall b,
+  ~(b = true) <-> b = false.
+Proof.
+  intros; split; intros; destruct b; try (reflexivity); try (contradiction); try (inversion H).
+  intro. inversion H0.
+Qed. 
+
+Definition in_forest (f: forest) (v: vertex) :=
+  fold_right (fun t tl => T.contains_vertex t v || tl) false f.
+(*
+Lemma parent_in_same_tree: forall s g o x y t f,
+  valid_dfs_state s g o ->
+  (get_forest s) = t :: f ->
+  In (x, Some y) (get_stack s) ->
+  T.contains_vertex t y = true.
+Proof.
+  intros. generalize dependent f. generalize dependent x. revert y. revert t. induction H; simpl in *; intros.
+  - inversion H0.
+  - inversion H2; subst; simpl in *.
+    + inversion H0; subst; simpl in *.
+      apply in_app_or in H1. destruct H1.
+      * eapply add_to_stack_adds_parent in H1. inversion H1. inversion H2; subst.
+        apply T.singleton_2. reflexivity.
+      * destruct f. inversion H2; subst. 
+
+
+ simpl in H2. simpl in H1. destruct H1. inversion H1. eapply IHvalid_dfs_state. right. apply H1.
+         apply  simpl in H0. destruct o. inversion H0.
+Admitted.
+
+Lemma discovered_in_forest: forall s g o v n,
+  valid_dfs_state s g o ->
+  M.find v (get_d_times s) = Some n ->
+  in_forest (get_forest s) v = true.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - rewrite P.F.empty_o in H0. inversion H0.
+  - inversion H1; subst; simpl in *.
+    + destruct (O.eq_dec v x); rewrite orb_true_iff.
+      *  left. setoid_rewrite e. rewrite T.singleton_2. reflexivity.
+      * right. apply IHvalid_dfs_state. rewrite F.add_neq_o in H0. apply H0. auto.
+    + destruct (O.eq_dec v x); rewrite orb_true_iff.
+      * left. setoid_rewrite e. apply T.add_child_5. 
+
+
+ rewrite T.add_child. reflexivity.
+      * right. apply IHvalid_dfs_state. rewrite F.add_neq_o in H0. apply H0. auto.
+
+Lemma finished_in_forest: forall s g o v n,
+  valid_dfs_state s g o ->
+  M.find v (get_f_times s) = Some n ->
+  in_forest (get_forest s) v = true.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - rewrite P.F.empty_o in H0. inversion H0.
+  - inversion H1; subst; simpl in *.
+    + rewrite IHvalid_dfs_state. apply orb_true_r. apply H0.
+    + apply IHvalid_dfs_state in H0. rewrite orb_true_iff in H0.
+      destruct H0. rewrite T.add_child_3. reflexivity. apply H0.
+      rewrite H0. apply orb_true_r.
+    +  simpl. remember (g0, f, M.add x time f_times, d_times, time + 1, remain_d, S.remove x remain_f, tl) as s'.
+      assert (valid_dfs_state s' g o). econstructor. apply H. apply H1.
+      destruct (O.eq_dec x v).
+      * assert (G.contains_vertex g v = true). eapply remain_f_contains_valid_vertices. apply H.
+      subst; simpl. setoid_rewrite <- e. apply H3. 
+      pose proof finished_vertex_not_remaining. apply (H6 _ _ _ _ H) in H5. subst; simpl in *.
+      destruct H5. clear H6. setoid_rewrite e in H3. apply contrapositive in H5.  
+
+
+ in H4.
+       
+
+
+ Search T.contains_vertex.
+
+
+ rewrite IHvalid_dfs_state. apply orb_true_r. apply H0.
+
+Lemma forest_empty_only_at_start: forall s g o,
+  valid_dfs_state s g o ->
+  get_forest s = nil <-> get_time s = 0.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - split; reflexivity.
+  - inversion H0; subst; simpl in *; split; intros.
+    + inversion H2.
+    + omega.
+    + inversion H2.
+    + omega.
+    + assert (A:= H3). rewrite IHvalid_dfs_state in H3. subst.
+      
+
+
+ subst. assert (time = 0). apply IHva destruct time. inversion H2.
+
+Lemma dfs_never_returns_to_start: forall s s' g o,
+  valid_dfs_state s g o ->
+  dfs_step s s' ->
+  s' <> start_state g o.
+Proof.
+  intros. inversion H0; unfold start_state.
+  - destruct o. destruct (G.contains_vertex g v); intro;
+    inversion H4. intro. inversion H4.
+  - destruct o. destruct (G.contains_vertex g v); intro;
+    inversion H4. intro. inversion H4.
+  - destruct o. intro. inversion H5; subst. assert (M.mem x (M.empty nat) = true).
+    rewrite <- H9. rewrite F.add_b. rewrite orb_true_iff. left. unfold F.eqb.
+    intuition. rewrite P.F.empty_a in H3. inversion H3. 
+    intro. inversion H5; subst. assert (M.mem x (M.empty nat) = true).
+    rewrite <- H9. rewrite F.add_b. rewrite orb_true_iff. left. unfold F.eqb.
+    intuition. rewrite P.F.empty_a in H3. inversion H3.
+  - destruct o; intro A; inversion A; subst.
+    + assert (G.contains_vertex g x = true). {
+      eapply stack_contains_valid_vertices. apply H. simpl. reflexivity.
+      simpl. left. reflexivity. } 
+      rewrite G.set_of_graph_1 in H4. apply S.mem_1 in H4. rewrite H4 in H1. inversion H1.
+    + assert (G.contains_vertex g x = true). {
+      eapply stack_contains_valid_vertices. apply H. simpl. reflexivity.
+      simpl. left. reflexivity. } 
+      rewrite G.set_of_graph_1 in H4. apply S.mem_1 in H4. rewrite H4 in H1. inversion H1.
+  - (*ugh this one is annoying, need to prove that either the start option was none (or different),
+      or that it cannot be the same because that is already done*)
+    destruct o eqn : ?. 
+    + destruct (G.contains_vertex g v) eqn : ?.
+      * intro. inversion H4; subst.
+
+
+
+       destruct (G.contains_vertex g v) eqn : ?.
+      * 
+    auto. apply eq_refl.
+
+
+ destruct o; intro A; inversion A.
+    intro. inversion H4; subst. intro. inversion H4. intro.
+
+Lemma forest_empty_only_at_start: forall s g o,
+  valid_dfs_state s g o ->
+  get_forest s = nil ->
+  s = start_state g o.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - reflexivity.
+  - inversion H1; subst; simpl in *; unfold start_state.
+    + 
+*)
+(*really specific, maybe generalize it later or make it follow from other things*)
+Lemma nempty_stack_forest: forall s g o x y,
+  valid_dfs_state s g o ->
+  In (x, Some y) (get_stack s) ->
+  get_forest s <> nil.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - destruct o. destruct (G.contains_vertex g v). inversion H0. inversion H. inversion H.
+    inversion H0. inversion H0.
+  - inversion H1; subst; simpl in *.
+    + intro. inversion H3.
+    + intro. inversion H3.
+    + apply IHvalid_dfs_state. right. apply H0.
+    + apply IHvalid_dfs_state. right. apply H0.
+    + destruct H0; inversion H0.
+Qed.
+
+Definition pair_lt (x y : vertex * option vertex) : Prop :=
+  match x,y with
+  | (a,b), (c,d) => O.lt a c
+  end.
+
+Lemma add_to_stack_sorted: forall v g r,
+  StronglySorted pair_lt (add_to_stack v g r).
+Proof.
+  intros. unfold add_to_stack.
+  assert (forall (l: list vertex) (a: vertex) (y: option vertex), Forall (O.lt a) l ->
+  Forall (pair_lt (a,y))  (fold_right (fun (v0 : S.elt) (t : list (S.elt * option O.t)) => if S.mem v0 r then (v0, Some v) :: t else t) nil l)).
+  { intros. induction l.
+    - simpl. constructor.
+    - simpl. inversion H; subst. destruct (S.mem a0 r). constructor. unfold pair_lt. apply H2.
+      apply IHl. apply H3. apply IHl. apply H3. }
+ assert (forall l, StronglySorted O.lt l ->
+  StronglySorted pair_lt (fold_right (fun (v0 : S.elt) (t : list (S.elt * option O.t)) => if S.mem v0 r then (v0, Some v) :: t else t) nil l)).
+  { intros. induction l.
+    - simpl. constructor.
+    - simpl. inversion H0; subst. destruct (S.mem a r). constructor.
+      + apply IHl. apply H3.
+      + apply H. apply H4.
+      + apply IHl. apply H3. }
+ destruct (G.neighbors_set) eqn : ?.
+  - apply H0. apply Sorted_StronglySorted.  unfold Relations_1.Transitive. apply O.lt_trans.
+    apply S.elements_3.
+  - constructor.
+Qed. 
+
+Lemma no_vertex_twice: forall s g o x y o' o'' t l1,
+  valid_dfs_state s g o ->
+  get_stack s = l1 ++ (x, o') :: (y, o'') :: nil ++ t ->
+  x <> y.
+Proof.
+  intros. generalize dependent l1. revert x y o' o'' t. induction H; intros; subst; simpl in *.
+  - destruct o. destruct (G.contains_vertex g v). destruct l1. inversion H0. inversion H0.
+    symmetry in H2. apply app_eq_nil in H2. destruct H2. inversion H2. symmetry in H0.
+    apply app_eq_nil in H0. destruct H0. inversion H0. symmetry in H0.
+    apply app_eq_nil in H0. destruct H0. inversion H0.
+  - inversion H0; subst; simpl in *.
+    + destruct (add_to_stack x0 g0 remain_d) eqn : ?.
+      * simpl in H1. eapply IHvalid_dfs_state. apply H1.
+      * simpl in H1. (*do later lots of list manipulation and stuff*)
+    syme
+
+Lemma no_vertex_twice: forall s g o x y o' o'' t,
+  valid_dfs_state s g o ->
+  get_stack s = (x, o') :: (y, o'') :: t ->
+  x <> y.
+Proof.
+  intros. generalize dependent x. revert o' o'' y. induction H; intros; subst; simpl in *.
+  - destruct o. destruct (G.contains_vertex g v). inversion H0. inversion H0. inversion H0.
+  - inversion H0; subst; simpl in *.
+    + destruct (add_to_stack x0 g0 remain_d) eqn : ?.
+      * simpl in H1. eapply IHvalid_dfs_state. apply H1.
+      * simpl in H1. inversion H1; subst. destruct s eqn : ?.
+        -- simpl in H5. inversion H5; subst. 
+           assert (g = g0). 
+           remember ((g0, f, f_times, d_times, time, remain_d, remain_f, (y, None) :: t)) as s'.
+           assert (g0 = get_graph s') by (subst; reflexivity). rewrite H3. symmetry. eapply graph_is_constant.
+           subst. apply H. subst. assert (G.contains_edge g0 y x = true). eapply only_add_neighbors.
+           rewrite Heqs. simpl. left. reflexivity. assert (y <> x).
+           eapply G.contains_edge_3. apply H3. auto.
+         -- inversion H5; subst. assert (pair_lt (x, o') (y, o'')). 
+            assert (StronglySorted pair_lt ((x, o') :: (y, o'') :: l)). rewrite <- Heqs.
+            apply add_to_stack_sorted. inversion H3; subst. inversion H8; subst. apply H9.
+            unfold pair_lt in H3. apply O.lt_not_eq. apply H3.
+      + destruct (add_to_stack x0 g0 remain_d) eqn : ?.
+      * simpl in H1. eapply IHvalid_dfs_state. apply H1.
+      * simpl in H1. inversion H1; subst. destruct s eqn : ?.
+        -- simpl in H1. inversion H1; subst. 
+           assert (g = g0). 
+           remember (g0, t0 :: f, f_times, d_times, time, remain_d, remain_f, (y, Some y0) :: t) as s'.
+           assert (g0 = get_graph s') by (subst; reflexivity). rewrite H3. symmetry. eapply graph_is_constant.
+           subst. apply H. subst. assert (G.contains_edge g0 y x = true). eapply only_add_neighbors.
+           rewrite Heqs. simpl. left. reflexivity. assert (y <> x).
+           eapply G.contains_edge_3. apply H3. auto.
+         -- inversion H1; subst. assert (pair_lt (x, o') (y, o'')). 
+            assert (StronglySorted pair_lt ((x, o') :: (y, o'') :: l)). rewrite <- Heqs.
+            apply add_to_stack_sorted. inversion H3; subst. inversion H8; subst. apply H9.
+            unfold pair_lt in H3. apply O.lt_not_eq. apply H3.
+      + 
+
+
+ destruct tl. inversion H1. inversion H1; subst. eapply IHvalid_dfs_state. apply H1. 
+      *
+
+(*An important theorem: any valid state can step iff it is not done*)
+Lemma dfs_progress: forall s g o,
+  valid_dfs_state s g o ->
+  (exists s', dfs_step s s') <-> done' s = false.
+Proof.
+  intros. unfold done'. split; intros.
+  - induction H.
+    + unfold start_state in *; simpl. destruct o.
+      * destruct (G.contains_vertex g v).
+        -- destruct H0. inversion H; subst; try(solve_set_empty). rewrite andb_false_iff in H13. 
+           destruct H13; assumption.
+        -- destruct H0. inversion H; subst. apply S.min_elt_1 in H8. apply S.mem_1 in H8.
+          solve_set_empty. 
+      * destruct H0. inversion H; subst.  apply S.min_elt_1 in H8. apply S.mem_1 in H8.
+        solve_set_empty. 
+    + inversion H1; subst; simpl in *.
+      * destruct H0. remember ((g0, f, f_times, d_times, time, remain_d, remain_f, (x, None) :: tl)) as s.
+        assert (S.mem x (get_remain_d s) = true) by (subst; simpl; assumption).
+        eapply vertex_in_finish_if_not_discovered in H3. subst; simpl in *. solve_set_empty. apply H.
+      * destruct H0. remember ((g0, t :: f, f_times, d_times, time, remain_d, remain_f, (x, Some y) :: tl)) as s.
+        assert (S.mem x (get_remain_d s) = true) by (subst; simpl; assumption).
+        eapply vertex_in_finish_if_not_discovered in H3. subst; simpl in *. solve_set_empty. apply H.
+      * destruct H0. destruct (S.is_empty (S.remove x remain_f)) eqn : A.
+        -- inversion H0; subst; simpl in *. 
+           ++ assert (x <> x1). intro. subst. rewrite H13 in H2. inversion H2.
+           remember ((g0, f, f_times, d_times, time, remain_d, remain_f, (x, o0) :: (x1, None) :: tl0)) as s'.
+           assert (S.mem x1 (get_remain_d s') = true) by (subst; simpl; assumption).
+           eapply vertex_in_finish_if_not_discovered in H5. subst; simpl in *.
+           pose proof (@P2.Dec.F.remove_neq_b remain_f x x1). apply H6 in H4. rewrite H5 in H4.
+            solve_set_empty. apply H.
+           ++ assert (x <> x1). intro. subst. rewrite H13 in H2. inversion H2.
+           remember (g0, t :: f0, f_times, d_times, time, remain_d, remain_f, (x, o0) :: (x1, Some y) :: tl0) as s'.
+           assert (S.mem x1 (get_remain_d s') = true) by (subst; simpl; assumption).
+           eapply vertex_in_finish_if_not_discovered in H5. subst; simpl in *.
+           pose proof (@P2.Dec.F.remove_neq_b remain_f x x1). apply H6 in H4. rewrite H5 in H4.
+            solve_set_empty. rewrite Heqs'. apply H.
+          ++ solve_set_empty.
+          ++ rewrite andb_false_iff in H15. destruct H15. rewrite non_empty_set_has_elements in H4.
+            destruct H4. apply S.mem_1 in H4.
+            remember ((g0, f, f_times, d_times, time, remain_d, remain_f, (x, o0) :: (x1, y) :: tl0)) as s'.
+            assert (S.mem x0 (get_remain_d s') = true) by (subst; simpl; assumption).
+            eapply vertex_in_finish_if_not_discovered in H5. subst; simpl in *.
+            destruct (O.eq_dec x x0).
+            ** setoid_rewrite <- e in H4. rewrite H4 in H2. inversion H2.
+            ** rewrite <- (@P2.FM.remove_neq_b _ x x0) in H5. solve_set_empty. auto.
+            ** apply H.
+            ** rewrite H4 in A. inversion A.
+        ++ apply S.min_elt_1 in H13. apply S.mem_1 in H13. assert (min <> x).
+          intro. subst. rewrite H13 in H2. inversion H2.
+          remember ((g0, f, f_times, d_times, time, remain_d, remain_f, (x, o0) :: nil)) as s'.
+          assert (S.mem min (get_remain_d s') = true) by (subst; simpl; assumption).
+          eapply vertex_in_finish_if_not_discovered in H5. subst; simpl in *.
+          rewrite <- (@P2.FM.remove_neq_b _ x min) in H5. solve_set_empty. auto. rewrite Heqs'.
+          apply H.
+      -- reflexivity.
+      * rewrite andb_false_iff in H4. destruct H4.
+        remember (g0, f, f_times, d_times, time, remain_d, remain_f, (x, y) :: tl) as s'.
+        assert (S.is_empty (get_remain_d s') = false) by (subst; simpl; assumption).
+        pose proof (finish_discover_before_finishing _ _ _ H).
+        apply contrapositive in H6. subst; simpl in *. destruct (S.is_empty remain_f).
+        contradiction. reflexivity. rewrite H5. auto. apply H4.
+      * apply S.min_elt_1 in H2. apply S.mem_1 in H2. 
+        remember (g0, f, f_times, d_times, time, remain_d, remain_f, nil) as s'.
+        assert (S.mem min (get_remain_d s') = true) by (subst; simpl; assumption).
+        eapply vertex_in_finish_if_not_discovered in H3. subst; simpl in *. solve_set_empty.
+        apply H.
+  - inversion H; subst; simpl in *.
+    + unfold start_state in *. destruct o.
+      * destruct (G.contains_vertex g v) eqn : ?.
+        -- exists (g, (T.singleton v) :: nil, M.empty nat, (M.add v 0 (M.empty nat)), 1, (S.remove v (G.set_of_graph g)),
+           (G.set_of_graph g), (add_to_stack v g (G.set_of_graph g)) ++ (v, None) :: nil).
+            apply dfs_discover_root. apply S.mem_1. apply G.set_of_graph_1 in Heqb. apply Heqb.
+        -- destruct (S.min_elt (G.set_of_graph g)) eqn : ?. 
+          ++ exists (g, @nil tree, M.empty nat, M.empty nat, 0, G.set_of_graph g, G.set_of_graph g, 
+           (e, None)::nil). apply dfs_new_cc. apply Heqo.
+          ++ apply S.min_elt_3 in Heqo. apply S.is_empty_1 in Heqo. rewrite Heqo in H0. inversion H0.
+      * destruct (S.min_elt (G.set_of_graph g)) eqn : ?. 
+          ++ exists (g, @nil tree, M.empty nat, M.empty nat, 0, G.set_of_graph g, G.set_of_graph g, 
+           (e, None)::nil). apply dfs_new_cc. apply Heqo.
+          ++ apply S.min_elt_3 in Heqo. apply S.is_empty_1 in Heqo. rewrite Heqo in H0. inversion H0.
+    + inversion H2; subst; simpl in *.
+      * destruct (add_to_stack x g0 remain_d) eqn : ?.
+        -- simpl. econstructor. apply dfs_finish. rewrite P2.Dec.F.remove_b. rewrite H3.
+            simpl. unfold P2.Dec.F.eqb. destruct (O.eq_dec x x). reflexivity. exfalso.
+            apply n. apply eq_refl.
+            remember (g0, f, f_times, d_times, time, remain_d, remain_f, (x, None) :: tl) as s'.
+            assert (S.mem x (get_remain_d s') = true) by (subst; simpl; assumption).
+            eapply vertex_in_finish_if_not_discovered in H4. subst; simpl in *. apply H4. apply H1.
+        -- simpl. destruct p. assert (o0 = Some x). eapply add_to_stack_adds_parent. 
+            rewrite Heqs. simpl. left. reflexivity. rewrite H4.
+            econstructor. apply dfs_discover_child. assert (x <> t). { eapply G.contains_edge_3.
+            eapply only_add_neighbors. rewrite Heqs. simpl. left. reflexivity. }
+            rewrite P2.Dec.F.remove_neq_b. eapply only_add_yet_to_be_discovered.
+            rewrite Heqs. simpl. left. reflexivity. apply H5. 
+      * destruct (add_to_stack x g0 remain_d) eqn : ?.
+        -- simpl. econstructor. apply dfs_finish. rewrite P2.Dec.F.remove_b. rewrite H3.
+            simpl. unfold P2.Dec.F.eqb. destruct (O.eq_dec x x). reflexivity. exfalso.
+            apply n. apply eq_refl.
+            remember (g0, t :: f, f_times, d_times, time, remain_d, remain_f, (x, Some y) :: tl) as s'.
+            assert (S.mem x (get_remain_d s') = true) by (subst; simpl; assumption).
+            eapply vertex_in_finish_if_not_discovered in H4. subst; simpl in *. apply H4. apply H1.
+        -- simpl. destruct p. assert (o0 = Some x). eapply add_to_stack_adds_parent. 
+            rewrite Heqs. simpl. left. reflexivity. rewrite H4.
+            econstructor. apply dfs_discover_child. assert (x <> t0). { eapply G.contains_edge_3.
+            eapply only_add_neighbors. rewrite Heqs. simpl. left. reflexivity. }
+            rewrite P2.Dec.F.remove_neq_b. eapply only_add_yet_to_be_discovered.
+            rewrite Heqs. simpl. left. reflexivity. apply H5.
+      * destruct tl.
+        -- remember (g0, f, M.add x time f_times, d_times, time + 1, remain_d, S.remove x remain_f, nil) as s'.
+            assert (S.Equal (get_remain_d s') (get_remain_f s')). { eapply empty_stack_no_gray.
+            apply H. subst. simpl. reflexivity. } subst; simpl in *. setoid_rewrite <- H5 in H0.
+            destruct (S.min_elt remain_d) eqn : ?. econstructor. apply dfs_new_cc. apply Heqo1.
+            apply S.min_elt_3 in Heqo1. apply S.is_empty_1 in Heqo1. rewrite Heqo1 in H0. inversion H0.
+        -- destruct p. destruct (S.mem e remain_d) eqn : ?.
+          ++ destruct o1.
+            ** assert (f <> nil). 
+              remember (g0, f, f_times, d_times, time, remain_d, remain_f, (x, o0) :: (e, Some t) :: tl) as s'.
+              assert (f = get_forest s') by (subst; simpl; reflexivity). rewrite H5.
+              eapply nempty_stack_forest. apply H1.
+               subst; simpl. right. left. reflexivity.
+              destruct f. contradiction. econstructor. apply dfs_discover_child. apply Heqb.
+            ** econstructor. apply dfs_discover_root. apply Heqb.
+          ++ destruct (S.mem e remain_f) eqn : ?.
+            ** econstructor. apply dfs_finish. apply Heqb. rewrite P2.Dec.F.remove_neq_b.
+               apply Heqb0.  
+
+
+
+  auto.
+
+ exists (g0, T.singleton x :: f, (M.add x (time + 1) f_times), (M.add x d_times),
+            time + 2, S.remove x remain_d, S.remove x remain_f, tl).
+
+
+dfs_step (g, f, f_times, d_times, time, remain_d, remain_f, (x,o) :: tl)
+    (g,  f, (M.add x time f_times), d_times, (time + 1), remain_d, (S.remove x remain_f), tl)
+
+
+(g, (T.singleton x) :: f, f_times, (M.add x time d_times), (time + 1), (S.remove x remain_d), 
+    remain_f, (add_to_stack x g remain_d) ++  ((x, None) :: tl))
+
+
+ dfs_discover_root.
+  
+
+
+  apply H6 in H. subst; simpl in *.
+        rewrite H4 in H. inversion H.  subst; simpl in *. 
+        
+        
+        ++
+
+
+ intro.
+               subst. apply n. apply eq_refl. 
+           ** setoid_rewrite x in H4.
+
+
+ rewrite H4 in  apply H. 
+           rewrite -> (P2.Dec.F.remove_neq_b _ x) in H5. solve_set_empty.
+        destruct (S.is_empty remain_f) eqn : ?.
+
+
+
+ inversion H0; subst; simpl in *.
+        -- 
+            ++
+        --
 
 (*This gives us an idea that our choice of the [done] property was a good one: a state is done
   if it cannot step, actually might be better to do existence way first but well see*)
