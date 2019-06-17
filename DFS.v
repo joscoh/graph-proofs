@@ -1165,8 +1165,17 @@ Ltac size_of_remove :=
   | [H : _ |- (S.cardinal (S.remove ?x ?s)) + ?y < (S.cardinal ?s) + ?y] =>
     assert (S(S.cardinal (S.remove x s)) = S.cardinal s) by ( 
     apply P2.remove_cardinal_1; prove_in_set x s); omega
-  
-  end.
+  | [H : _ |- (S.cardinal (S.remove ?x (S.remove ?z ?s))) + ?y < (S.cardinal ?s) + ?y] =>
+    assert (S(S(S.cardinal (S.remove x (S.remove z s)))) = S.cardinal s) by ( 
+    rewrite P2.remove_cardinal_1; [apply P2.remove_cardinal_1| prove_in_set x (S.remove z s)]; prove_in_set z s; omega)
+  | [H : _ |- (?y + S.cardinal (S.remove ?x (S.remove ?z ?s))) <  ?y + (S.cardinal ?s)] =>
+    assert (S(S(S.cardinal (S.remove x (S.remove z s)))) = S.cardinal s) by ( 
+    rewrite P2.remove_cardinal_1; [apply P2.remove_cardinal_1| prove_in_set x (S.remove z s)]; prove_in_set z s; omega)
+  | [H : _ |- S.cardinal (S.remove ?x ?s) + S.cardinal (S.remove ?y ?t) < S.cardinal ?s + S.cardinal ?t] =>
+    assert (S.cardinal (S.remove x s) + 0 < S.cardinal s + 0) by size_of_remove;
+    assert (S.cardinal (S.remove y t) + 0 < S.cardinal t + 0) by size_of_remove;
+    omega
+end; try(omega).
 
 (*The main lemma: any state that is not finished multisteps to some state with strictly smaller
   measure. Large parts of this proof are similar to progress TODO: maybe fix that or improve the proof*)
@@ -1338,6 +1347,552 @@ Lemma all_start_states_terminate: forall g o,
 Proof.
   intros. eapply all_states_terminate. constructor.
 Qed.
+
+Print state.
+Print exist.
+Locate "{ _ : _ | _ }".
+Print sig.
+Print exist.
+Lemma zgtz : 0 > 0 -> False.
+omega. Qed.
+(*
+Program Fixpoint pred_strong2 g o (H : {n : state | valid_dfs_state n g o})  : nat :=
+  match H with
+    | exist _ (s) _ => get_time s
+  end.*)
+Require Import Coq.Program.Wf.
+
+Fixpoint pop_off_stack (s: stack) (remaining: S.t) : stack :=
+  match s with
+  | nil => nil
+  | (v,p) :: t => if (negb (S.mem v remaining)) then pop_off_stack t remaining
+                  else s
+  end.
+Print forallb.
+Lemma pop_off_stack_off: forall s r,
+  exists l1, s = l1 ++ pop_off_stack s r  /\ forallb (fun (x: O.t * option O.t) => 
+  let (a,b) := x in negb (S.mem a r)) l1 = true.
+Proof.
+  intros. induction s.
+  - simpl. exists nil. split. reflexivity. simpl. reflexivity.
+  - simpl. destruct a. destruct (negb (S.mem t r)) eqn : ?.
+    + destruct IHs. exists ((t,o) :: x). split. destruct H. rewrite H at 1. reflexivity.
+      simpl. rewrite Heqb. destruct H. rewrite H0. reflexivity.
+    + exists nil. split; reflexivity.
+Qed. 
+
+Lemma pop_off_stack_on: forall s r x y t,
+  pop_off_stack s r = (x,y) :: t ->
+  S.mem x r = true.
+Proof.
+ intro. induction s; intros.
+  - simpl in H. inversion H.
+  - simpl in H. destruct a. destruct (S.mem t0 r) eqn : ?.
+    + simpl in H. inversion H; subst. apply Heqb.
+    + simpl in H. eapply IHs. apply H.
+Qed.
+
+Lemma pop_multi: forall g d_times f_times n remain_d remain_f f st g' o,
+  valid_dfs_state (g, f, f_times, d_times, n, remain_d, remain_f, st) g' o ->
+  done (g, f, f_times, d_times, n, remain_d, remain_f, st) = false ->
+  dfs_multi (g, f, f_times, d_times, n, remain_d, remain_f, st)
+   (g, f, f_times, d_times, n, remain_d, remain_f, pop_off_stack st remain_f).
+Proof.
+  intros. induction st.
+  - simpl in *. apply multi_refl.
+  - simpl. destruct a. destruct (S.mem t remain_f) eqn : ?.
+    + simpl. apply multi_refl.
+    + remember (g, f, f_times, d_times, n, remain_d, remain_f, (t, o0) :: st) as s.
+      remember (g, f, f_times, d_times, n, remain_d, remain_f, st) as s'.
+      assert (dfs_step s s'). rewrite Heqs. rewrite Heqs'. apply dfs_done_already. 
+      assert (S.mem t (get_remain_f s) = false) by (subst; simpl; assumption).
+      pose proof vertex_in_finish_if_not_discovered. specialize (H2 s g o).
+      rewrite Heqs in H2; simpl in H2.
+      assert (g = g'). assert (g = get_graph s) by (subst; reflexivity). 
+      rewrite H3. rewrite Heqs. eapply graph_is_constant. apply H. subst.
+      specialize (H2 H t).
+      apply contrapositive in H2. destruct (S.mem t remain_d) eqn : ?. contradiction. reflexivity.
+      intro. rewrite H3 in Heqb. inversion Heqb. apply Heqb. unfold done in H0. simpl in H0.
+      rewrite andb_comm. apply H0.
+      simpl. eapply multi_trans. apply multi_R. subst. apply H1.
+      subst. apply IHst. eapply step. apply H. apply H1. unfold done in *; simpl in *. apply H0.
+Qed. 
+
+
+Lemma pop_pres_valid: forall g d_times f_times n remain_d remain_f f st g' o,
+  done (g, f, f_times, d_times, n, remain_d, remain_f, st) = false ->
+  valid_dfs_state (g, f, f_times, d_times, n, remain_d, remain_f, st) g' o ->
+  valid_dfs_state (g, f, f_times, d_times, n, remain_d, remain_f, pop_off_stack st remain_f) g' o.
+Proof.
+  intros. eapply multistep_preserves_valid. apply H0. eapply pop_multi. apply H0. apply H.
+Qed.
+
+
+Lemma invalid_state: forall (s: state) g o,
+  valid_dfs_state s g o ->
+  ~ valid_dfs_state s g o ->
+  False.
+Proof.
+  intros. contradiction.
+Qed.
+
+Definition dfs_helper (s : state) : state  :=
+  match s with
+  | (g, f, f_times, d_times, n, remain_d, remain_f, nil) =>
+    match S.min_elt remain_d with
+    | None => s
+    | Some min => (g, (T.singleton min :: f), f_times, M.add min n d_times, n+1, 
+          S.remove min remain_d, remain_f, (add_to_stack min g remain_d) ++ (min, None) :: nil)
+    end
+  | (g, f, f_times, d_times, n, remain_d, remain_f, (x, None) :: tl) =>
+    if bool_dec (S.mem x remain_d) true then
+        (g, (T.singleton x :: f), f_times, M.add x n d_times, n+1, S.remove x remain_d,
+        remain_f, (add_to_stack x g remain_d) ++ (x, None) :: tl)
+    (*The condition is not strictly needed but it makes the proof simpler for now and doesn't make
+      a difference*)
+    else if bool_dec (S.mem x remain_f) true then
+      (g, f, M.add x n f_times, d_times, n+1, remain_d, S.remove x remain_f, tl)
+    else if  negb (done s) then
+      (g, f, f_times, d_times, n, remain_d, remain_f, (pop_off_stack ((x, None) :: tl) remain_f))
+    else s
+  |(g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl) =>
+    if bool_dec (S.mem x remain_d) true then
+        (g, (T.add_child t y x) :: f, f_times, M.add x n d_times, n+1,  
+        S.remove x remain_d, remain_f, (add_to_stack x g remain_d) ++ (x,Some y) :: tl)
+    else if bool_dec (S.mem x remain_f) true then
+        (g, t :: f, M.add x n f_times, d_times, n+1, remain_d, S.remove x remain_f, tl)
+    else if  negb (done s) then
+      (g, t :: f, f_times, d_times, n, remain_d, remain_f, (pop_off_stack ((x, Some y) :: tl) remain_f))
+    else s
+  (*Impossible*)
+  | _ => s
+  end.
+
+Lemma dfs_helper_multisteps: forall s g o,
+  valid_dfs_state s g o ->
+  dfs_multi s (dfs_helper s).
+Proof.
+  intros. unfold dfs_helper. destruct s. repeat( destruct p). destruct f.
+  - destruct s.
+    + destruct (S.min_elt t0) eqn : ?.
+      * eapply multi_trans; apply multi_R. apply dfs_new_cc. apply Heqo0.
+        apply dfs_discover_root. apply S.mem_1. apply S.min_elt_1. assumption.
+      * apply multi_refl.
+    + destruct p. destruct o0.
+      * apply multi_refl.
+      * destruct (S.mem t3 t0) eqn : ?; simpl.
+        -- apply multi_R. apply dfs_discover_root. apply Heqb.
+        -- destruct (bool_dec (S.mem t3 t)).
+           ++ apply multi_R.  apply dfs_finish; assumption.
+           ++ remember (g0, @nil tree, t2, t1, n, t0, t, (t3, None) :: s) as s'.
+              setoid_rewrite <- Heqs'. destruct (done s') eqn : ?; simpl.
+              ** subst. apply multi_refl. 
+              ** destruct (S.mem t3 t) eqn : ?; simpl.
+                --- subst; apply multi_refl.
+                --- remember  (g0, @nil tree, t2, t1, n, t0, t,  s) as s''.
+                    assert (dfs_step s' s''). subst. unfold done in *; simpl in *.
+                    apply dfs_done_already; try(assumption). rewrite andb_comm. assumption.
+                    eapply multi_trans.
+                    apply multi_R. subst. apply H0. subst. eapply pop_multi.
+                    eapply step. apply H. apply H0. unfold done in *; simpl in *; assumption.
+  - destruct s.
+    + destruct (S.min_elt t0) eqn : ?.
+      * eapply multi_trans; apply multi_R. apply dfs_new_cc. apply Heqo0.
+        apply dfs_discover_root. apply S.mem_1. apply S.min_elt_1. assumption.
+      * apply multi_refl.
+    + destruct p. destruct o0.
+      * destruct (S.mem t4 t0) eqn : ?; simpl.
+        -- apply multi_R. apply dfs_discover_child. apply Heqb.
+        -- destruct (bool_dec (S.mem t4 t)).
+           ++ apply multi_R. apply dfs_finish; assumption.
+           ++ remember (g0, t3 :: f, t2, t1, n, t0, t, (t4, Some t5) :: s) as s'.
+              setoid_rewrite <- Heqs'. destruct (done s') eqn : ?; simpl.
+              ** subst. apply multi_refl. 
+              ** destruct (S.mem t4 t) eqn : ?; simpl.
+                --- subst. apply multi_refl. 
+                --- remember  (g0, t3 :: f, t2, t1, n, t0, t, s) as s''.
+                    assert (dfs_step s' s''). subst. unfold done in *; simpl in *.
+                    apply dfs_done_already; try(assumption). rewrite andb_comm. assumption.
+                    eapply multi_trans.
+                    apply multi_R. subst. apply H0. subst. eapply pop_multi.
+                    eapply step. apply H. apply H0. unfold done in *; simpl in *; assumption.
+      * destruct (S.mem t4 t0) eqn : ?; simpl.
+        -- apply multi_R. apply dfs_discover_root. apply Heqb.
+        -- destruct (bool_dec (S.mem t4 t)).
+           ++ apply multi_R. apply dfs_finish; assumption.
+           ++ remember (g0, t3 :: f, t2, t1, n, t0, t, (t4, None) :: s) as s'.
+              setoid_rewrite <- Heqs'. destruct (done s') eqn : ?; simpl.
+              ** subst. apply multi_refl.
+              ** destruct (S.mem t4 t) eqn : ?; simpl.
+                --- subst. apply multi_refl. 
+                --- remember  (g0, t3 :: f, t2, t1, n, t0, t, s) as s''.
+                    assert (dfs_step s' s''). subst. unfold done in *; simpl in *.
+                    apply dfs_done_already; try(assumption). rewrite andb_comm. assumption.
+                     eapply multi_trans.
+                    apply multi_R. subst. apply H0. subst. eapply pop_multi.
+                    eapply step. apply H. apply H0. unfold done in *; simpl in *; assumption.
+Qed. 
+  
+
+Lemma dfs_helper_preserves_valid: forall s g o,
+  valid_dfs_state s g o ->
+  valid_dfs_state (dfs_helper s) g o.
+Proof.
+  intros. eapply multistep_preserves_valid. apply H. eapply dfs_helper_multisteps.
+  apply H.
+Qed.
+
+Program Fixpoint dfs_exec (g: graph) (o: option vertex) (s: state) (H: valid_dfs_state s g o) 
+   {measure (measure_dfs s)} : 
+  {s' : state | dfs_multi s s' /\ done' s' = true} :=
+  match s  with
+  (*If the stack is empty*)
+  | (g, f, f_times, d_times, n, remain_d, remain_f, nil) => 
+      match S.min_elt remain_d with
+        (*If there are no more elements to be discovered, we are done*)
+        | None => exist _ s _
+        (*Otherwise, we discover the minimum element in the graph and add it and its neighbors to the stack*)
+        | Some min => 
+          exist _ (proj1_sig (dfs_exec g o (dfs_helper s) _)) _
+       end
+  (*If the vertex on top of the stack has no parent (is a root in the dfs forest)*)
+  | (g, f, f_times, d_times, n, remain_d, remain_f, (x, None) :: tl) =>
+     exist _ (proj1_sig (dfs_exec g o (dfs_helper s) _)) _
+  (*If the vertex on top of the stack has a parent (is an internal node/leaf in the dfs forest*)
+  | (g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl) =>
+    if bool_dec (S.mem x remain_f) true then
+      exist _ (proj1_sig (dfs_exec g o (dfs_helper s) _)) _
+    else 
+      exist _ (proj1_sig (dfs_exec g o (dfs_helper (dfs_helper s)) _)) _
+  | (_, _, _, _, _, _, _, _) => match invalid_state s g o H _ with end
+    end.
+Next Obligation.
+split. apply multi_refl. unfold done'; simpl. symmetry in Heq_anonymous. apply S.min_elt_3 in Heq_anonymous.
+apply S.is_empty_1. assert (A:= H).  apply empty_stack_no_gray in H.
+ simpl in H. setoid_rewrite <- H. assumption. reflexivity.
+Defined.
+Next Obligation.
+eapply dfs_helper_preserves_valid. assert (g = g0). 
+assert (g = get_graph (g, f, f_times, d_times, n, remain_d, remain_f, nil)) by (reflexivity).
+rewrite H0. eapply graph_is_constant. apply H. subst. apply H.
+Defined.
+Next Obligation. 
+unfold measure_dfs in *; simpl in *. 
+simpl. destruct f. destruct (S.min_elt remain_d) eqn : ?; simpl.
+- size_of_remove.
+- inversion Heq_anonymous.
+- destruct (S.min_elt remain_d) eqn : ?; simpl.
+  + size_of_remove.
+  + inversion Heq_anonymous.
+Defined.
+Next Obligation.
+remember (dfs_exec g o (dfs_helper (g, f, f_times, d_times, n, remain_d, remain_f, nil))
+        (dfs_exec_func_obligation_2 g0 o (g, f, f_times, d_times, n, remain_d, remain_f, nil) H dfs_exec g f
+           f_times d_times n remain_d remain_f eq_refl)
+        (dfs_exec_func_obligation_3 g0 o (g, f, f_times, d_times, n, remain_d, remain_f, nil) H dfs_exec g f
+           f_times d_times n remain_d remain_f eq_refl min Heq_anonymous)) as s'.
+setoid_rewrite <- Heqs'. destruct Heqs'. destruct s'. simpl. destruct a. split.
+eapply multi_trans. eapply dfs_helper_multisteps. apply H. apply H0. apply H1.
+Defined.
+Next Obligation.
+eapply dfs_helper_preserves_valid. assert (g = g0). 
+assert (g = get_graph (g, f, f_times, d_times, n, remain_d, remain_f, (x, None) :: tl) ) by (reflexivity).
+rewrite H0. eapply graph_is_constant. apply H. subst. apply H.
+Defined.
+Next Obligation.
+unfold measure_dfs in *. simpl in *. destruct f.
+destruct (S.mem x remain_d) eqn : ?; simpl. size_of_remove.
+destruct (S.mem x remain_f) eqn : ?; simpl. size_of_remove.
+Admitted.
+Next Obligation.
+remember (dfs_exec g o (dfs_helper (g, f, f_times, d_times, n, remain_d, remain_f, (x, None) :: tl))
+        (dfs_exec_func_obligation_5 g0 o (g, f, f_times, d_times, n, remain_d, remain_f, (x, None) :: tl) H
+           dfs_exec g f f_times d_times n remain_d remain_f x tl eq_refl)
+        (dfs_exec_func_obligation_6 g0 o (g, f, f_times, d_times, n, remain_d, remain_f, (x, None) :: tl) H
+           dfs_exec g f f_times d_times n remain_d remain_f x tl eq_refl)) as s'.
+setoid_rewrite <- Heqs'. destruct Heqs'. destruct s'. simpl. destruct a. split.
+eapply multi_trans. eapply dfs_helper_multisteps. apply H. apply H0. apply H1.
+Defined.
+Next Obligation.
+eapply dfs_helper_preserves_valid. assert (g = g0). 
+assert (g = get_graph (g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl)) by (reflexivity).
+rewrite H1. eapply graph_is_constant. apply H. subst. apply H.
+Defined.
+Next Obligation.
+unfold measure_dfs in *. simpl in *.
+destruct (S.mem x remain_d) eqn : ?; simpl. size_of_remove.
+destruct (S.mem x remain_f) eqn : ?. simpl. size_of_remove.
+simpl. 
+destruct (done (g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl)) eqn : ?; simpl;
+setoid_rewrite Heqb1; simpl. inversion H0. inversion H0.
+Defined.
+Next Obligation.
+remember (dfs_exec g o (dfs_helper (g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl))
+        (dfs_exec_func_obligation_8 g0 o (g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl)
+           H dfs_exec g t f f_times d_times n remain_d remain_f x y tl eq_refl)
+        (dfs_exec_func_obligation_9 g0 o (g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl)
+           H dfs_exec g t f f_times d_times n remain_d remain_f x y tl eq_refl H0)) as s'.
+setoid_rewrite <- Heqs'. destruct Heqs'. destruct s'. simpl. destruct a. split.
+eapply multi_trans. eapply dfs_helper_multisteps. apply H. apply H1. apply H2.
+Defined.
+Next Obligation.
+ assert (g = g0). 
+assert (g = get_graph (g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl)) by (reflexivity).
+rewrite H1. eapply graph_is_constant. apply H. subst.
+eapply dfs_helper_preserves_valid. eapply dfs_helper_preserves_valid.  apply H.
+Defined.
+Next Obligation.
+unfold measure_dfs in *; simpl in *.
+destruct (S.mem x remain_d) eqn : ?; simpl.
+destruct (add_to_stack x g remain_d ++ (x, Some y) :: tl) eqn : ?; simpl.
+destruct (S.min_elt (S.remove x remain_d)) eqn : ?; simpl. size_of_remove. size_of_remove.
+destruct p. destruct o0.
+destruct (S.mem t0 (S.remove x remain_d)) eqn : ?; simpl.
+size_of_remove. destruct (S.mem t0 remain_f) eqn : ?; simpl.
+assert (S.cardinal (S.remove x remain_d) + 0 < S.cardinal remain_d + 0) by size_of_remove.
+assert (S.cardinal (S.remove t0 remain_f) + 0 < S.cardinal remain_f + 0) by (size_of_remove).
+omega.
+simpl.
+destruct (done
+            (g, T.add_child t y x :: f, f_times, M.add x n d_times, n + 1, S.remove x remain_d, remain_f,
+            (t0, Some t1) :: l)) eqn : ? ; simpl. size_of_remove. size_of_remove.
+destruct (S.mem t0 (S.remove x remain_d)) eqn : ?; simpl. size_of_remove. 
+destruct (S.mem t0 remain_f) eqn : ?; simpl. size_of_remove.
+ destruct ((done
+            (g, T.add_child t y x :: f, f_times, M.add x n d_times, n + 1, S.remove x remain_d, remain_f,
+            (t0, None) :: l))) eqn : ?; simpl. size_of_remove. size_of_remove.
+destruct (S.mem x remain_f) eqn : ?;simpl. contradiction.
+destruct (done (g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl)) eqn : ?; setoid_rewrite Heqb1; simpl.
+rewrite Heqb; simpl. rewrite Heqb0; simpl. setoid_rewrite Heqb1; simpl.
+(*Need to fix - make sure we do not accidentally step with done in the program*)
+simpl.
+
+ destruct tl; simpl.
+destruct (S.min_elt remain_d) eqn : ?; simpl. size_of_remove. size_of_remove. 
+ destruct p. destruct o0.
+destruct (S.mem t0 remain_d) eqn : ?; simpl. size_of_remove.  
+ destruct (S.mem t0 (S.remove x remain_f)) eqn : ?; simpl. size_of_remove.
+destruct (done (g, t :: f, M.add x n f_times, d_times, n + 1, remain_d, S.remove x remain_f, (t0, Some t1) :: tl)) eqn : ?; simpl.
+size_of_remove. size_of_remove. contradiction.
+
+
+ size_of_remove.
+assert (S(S.cardinal (S.remove x remain_d)) = S.cardinal remain_d) by 
+assert (S(S(S.cardinal (S.remove e (S.remove x remain_d)))) = S.cardinal remain_d). 
+    rewrite P2.remove_cardinal_1;
+
+ [apply P2.remove_cardinal_1| prove_in_set e (S.remove x remain_d) ]; prove_in_set x remain_d. omega. remain_d. omega.
+
+
+ size_of_remove. 
+assert (S(S(S.cardinal (S.remove e (S.remove x remain_d)) )) = S.cardinal remain_d).
+rewrite P2.remove_cardinal_1. apply P2.remove_cardinal_1. apply S.mem_2. apply Heqb.
+prove_in_set e (S.remove x remain_d). omega. size_of_remove.
+destruct p. destruct o0.
+destruct ((S.mem t0 (S.remove x remain_d))) eqn : ?; simpl. 
+
+
+
+
+
+    (*If we are discovering this vertex for the first time, then do the discovery process*)
+    if bool_dec (S.mem x remain_d) true then
+        exist _ (dfs_exec g o (g, (T.add_child t y x) :: f, f_times, M.add x n d_times, n+1,  
+        S.remove x remain_d, remain_f, (add_to_stack x g remain_d) ++ (x,Some y) :: tl)_) _
+    (*Otherwise, if it is not yet finished, then finish it*)
+    else if bool_dec (S.mem x remain_f) true then
+        exist _ (dfs_exec g o((g, t :: f, M.add x n f_times, d_times, n+1, remain_d, S.remove x remain_f, tl))_) _
+    else
+    (*Otherwise, it is done. Due to the decreasing measure condition in Program Fixpoint, we need to
+      continue this iteration until we start/finish another vertex. First, we pop off all finished vertices
+      from the stack*)
+      match (pop_off_stack ((x,Some y) :: tl) remain_f) with
+        (*If the resulting stack is empty, then we are either done (if remain_d is empty), or we 
+          discover the minimum element*)
+        | nil => match S.min_elt remain_d  with
+                 | None => exist _  (g, t::f, f_times, d_times, n, remain_d, remain_f, nil) _
+                 | Some min =>
+                    exist _ (dfs_exec g o (g, (T.singleton min :: f), f_times, M.add min n d_times, n+1, 
+                    S.remove min remain_d, remain_f, (min, None) :: nil)_) _
+              end
+        (*Otherwise, if the top element is *)
+        | (a,Some b) :: tl => if bool_dec (S.mem a remain_d) true then
+          exist _ (dfs_exec g o(g, (T.add_child t b a) :: f, f_times, M.add a n d_times, n+1, S.remove a remain_d, remain_f,
+          (add_to_stack a g remain_d) ++ (a,Some b) :: tl)_) _
+          else exist _ (dfs_exec g o (g, t::f, M.add a n f_times, d_times, n+1, remain_d, S.remove a remain_f, tl)_) _
+        | (a, None) :: tl => exist _ (dfs_exec g o (g, f, M.add a n f_times, d_times, n+1, remain_d, 
+          S.remove a remain_f, tl)_) _
+    end
+    | (_, _, _, _, _, _, _, _) => match invalid_state s g o H _ with end
+    end.
+
+
+    (*Otherwise, it is done. Due to the decreasing measure condition in Program Fixpoint, we need to
+      continue this iteration until we start/finish another vertex. First, we pop off all finished vertices
+      from the stack*)
+      match (pop_off_stack ((x,Some y) :: tl) remain_f) with
+
+Program Fixpoint dfs_exec (g: graph) (o: option vertex) (s: state) (H: valid_dfs_state s g o) 
+   {measure (measure_dfs s)} : 
+  {s' : state | dfs_multi s s' /\ done' s' = true} :=
+  match s  with
+  (*If the stack is empty*)
+  | (g, f, f_times, d_times, n, remain_d, remain_f, nil) => 
+      match S.min_elt remain_d with
+        (*If there are no more elements to be discovered, we are done*)
+        | None => exist _ s _
+        (*Otherwise, we discover the minimum element in the graph and add it and its neighbors to the stack*)
+        | Some min => 
+          exist _ (proj1_sig (dfs_exec g o (g, (T.singleton min :: f), f_times, M.add min n d_times, n+1, 
+          S.remove min remain_d, remain_f, (add_to_stack min g remain_d) ++ (min, None) :: nil) _)) _
+       end
+  (*If the vertex on top of the stack has no parent (is a root in the dfs forest)*)
+  | (g, f, f_times, d_times, n, remain_d, remain_f, (x, None) :: tl) =>
+    (*If it has not been discovered yet*)
+    if bool_dec (S.mem x remain_d) true) then
+        exist _ (dfs_exec g o (g, (T.singleton x :: f), f_times, M.add x n d_times, n+1, S.remove x remain_d,
+        remain_f, (add_to_stack x g remain_d) ++ (x, None) :: tl) _ ) _
+    (*Otherwise, it is finished, so we finish it by removing it from the stack and remain_f and adding a finish time*)
+    else exist _ (dfs_exec g o (g, f, M.add x n f_times, d_times, n+1, remain_d, S.remove x remain_f, tl) _) _
+  (*If the vertex on top of the stack has a parent (is an internal node/leaf in the dfs forest*)
+  | (g, t :: f, f_times, d_times, n, remain_d, remain_f, (x, Some y) :: tl) =>
+    (*If we are discovering this vertex for the first time, then do the discovery process*)
+    if bool_dec (S.mem x remain_d) true then
+        exist _ (dfs_exec g o (g, (T.add_child t y x) :: f, f_times, M.add x n d_times, n+1,  
+        S.remove x remain_d, remain_f, (add_to_stack x g remain_d) ++ (x,Some y) :: tl)_) _
+    (*Otherwise, if it is not yet finished, then finish it*)
+    else if bool_dec (S.mem x remain_f) true then
+        exist _ (dfs_exec g o((g, t :: f, M.add x n f_times, d_times, n+1, remain_d, S.remove x remain_f, tl))_) _
+    else
+    (*Otherwise, it is done. Due to the decreasing measure condition in Program Fixpoint, we need to
+      continue this iteration until we start/finish another vertex. First, we pop off all finished vertices
+      from the stack*)
+      match (pop_off_stack ((x,Some y) :: tl) remain_f) with
+        (*If the resulting stack is empty, then we are either done (if remain_d is empty), or we 
+          discover the minimum element*)
+        | nil => match S.min_elt remain_d  with
+                 | None => exist _  (g, t::f, f_times, d_times, n, remain_d, remain_f, nil) _
+                 | Some min =>
+                    exist _ (dfs_exec g o (g, (T.singleton min :: f), f_times, M.add min n d_times, n+1, 
+                    S.remove min remain_d, remain_f, (min, None) :: nil)_) _
+              end
+        (*Otherwise, if the top element is *)
+        | (a,Some b) :: tl => if bool_dec (S.mem a remain_d) true then
+          exist _ (dfs_exec g o(g, (T.add_child t b a) :: f, f_times, M.add a n d_times, n+1, S.remove a remain_d, remain_f,
+          (add_to_stack a g remain_d) ++ (a,Some b) :: tl)_) _
+          else exist _ (dfs_exec g o (g, t::f, M.add a n f_times, d_times, n+1, remain_d, S.remove a remain_f, tl)_) _
+        | (a, None) :: tl => exist _ (dfs_exec g o (g, f, M.add a n f_times, d_times, n+1, remain_d, 
+          S.remove a remain_f, tl)_) _
+    end
+    | (_, _, _, _, _, _, _, _) => match invalid_state s g o H _ with end
+    end.
+Next Obligation.
+split. apply multi_refl. unfold done'; simpl. symmetry in Heq_anonymous. apply S.min_elt_3 in Heq_anonymous.
+apply S.is_empty_1. assert (A:= H).  apply empty_stack_no_gray in H.
+ simpl in H. setoid_rewrite <- H. assumption. reflexivity.
+Defined.
+Next Obligation.
+remember(g, f, f_times, d_times, n, remain_d, remain_f, @nil (O.t * option O.t)) as s.
+assert (g0 = g). assert (g = get_graph s) by (subst; reflexivity). rewrite H0. symmetry. 
+eapply graph_is_constant. subst; apply H. subst.
+eapply multistep_preserves_valid. apply H. eapply multi_trans.
+apply multi_R. apply dfs_new_cc. symmetry. apply Heq_anonymous. 
+apply multi_R. apply dfs_discover_root. apply S.mem_1. apply S.min_elt_1. symmetry. assumption.
+Defined.
+Next Obligation.
+unfold measure_dfs; simpl. symmetry in Heq_anonymous. size_of_remove.
+Defined.
+Next Obligation. 
+remember (g, T.singleton min :: f, f_times, M.add min n d_times, n + 1, S.remove min remain_d, remain_f,
+        add_to_stack min g remain_d ++ (min, None) :: nil) as s.
+split. eapply multi_trans. eapply multi_trans. apply multi_R. apply dfs_new_cc.
+symmetry. apply Heq_anonymous. apply multi_R. apply dfs_discover_root.
+apply S.mem_1. apply S.min_elt_1. symmetry. assumption. 
+remember 
+     (dfs_exec g o
+        (g, T.singleton min :: f, f_times, M.add min n d_times, n + 1, S.remove min remain_d, remain_f,
+        add_to_stack min g remain_d ++ (min, None) :: nil)
+        (dfs_exec_func_obligation_2 g0 o (g, f, f_times, d_times, n, remain_d, remain_f, nil) H dfs_exec g f
+           f_times d_times n remain_d remain_f eq_refl min Heq_anonymous)
+        (dfs_exec_func_obligation_3 g0 o (g, f, f_times, d_times, n, remain_d, remain_f, nil) H dfs_exec g f
+           f_times d_times n remain_d remain_f eq_refl min Heq_anonymous)) as s'. setoid_rewrite <- Heqs'.
+destruct Heqs'. destruct s'. simpl. destruct a. apply H0.
+remember 
+(dfs_exec g o
+        (g, T.singleton min :: f, f_times, M.add min n d_times, n + 1, S.remove min remain_d, remain_f,
+        add_to_stack min g remain_d ++ (min, None) :: nil)
+        (dfs_exec_func_obligation_2 g0 o (g, f, f_times, d_times, n, remain_d, remain_f, nil) H dfs_exec g f
+           f_times d_times n remain_d remain_f eq_refl min Heq_anonymous)
+        (dfs_exec_func_obligation_3 g0 o (g, f, f_times, d_times, n, remain_d, remain_f, nil) H dfs_exec g f
+           f_times d_times n remain_d remain_f eq_refl min Heq_anonymous)) as s'.
+setoid_rewrite <- Heqs'. destruct s'. simpl. destruct Heqs'. destruct a. apply H1.
+Defined.
+Next Obligation.
+assert (g = g0). remember (g, f, f_times, d_times, n, remain_d, remain_f, (x, None) :: tl) as s.
+assert (g = get_graph s) by (subst; reflexivity). rewrite H0. eapply graph_is_constant. subst. apply H.
+subst. eapply step. apply H. apply dfs_finish. 
+eapply step. apply H.
+
+ destruct Heqs'.
+  destruct s'.  
+assert (dfs_multi s s' /\ done s' = true). subst. Check dfs_exe eapply proj2_sig.
+ eapply proj2_sig.
+assert (A:=dfs_exec). specialize (A g o s). destruct A.
+subst. eapply dfs_exec_func_obligation_2. apply H. intros. eapply dfs_exec. apply H0.
+apply recproof. reflexivity. assumption. subst; unfold measure_dfs; simpl; symmetry in Heq_anonymous; size_of_remove.
+destruct a. rewrite Heqs in H0. 
+
+
+
+  Check dfs_exec_func_obligation_1.
+assert (A:=dfs_exec).
+specialize (A g o s).
+
+
+ specialize (dfs_exec g o  rewrite dfs_exec. simpl.
+simpl.
+  graph_is_constantapply H0.
+
+      
+    
+(H : {s : state | valid_dfs_state s g o})
+
+  | (g, f, f_times, d_times, n, remain_d, remain_f, st)=>
+    match st with
+    | nil => match S.min_elt remain_d with
+             | None => exist _ (proj1_sig H) _
+             | Some min => let new_st := pop_off_stack st remain_f in
+                           match new_st with
+                           | nil => 
+
+
+
+    match S.min_elt remain_d with
+    | None => 
+  end.
+
+
+
+Program Fixpoint dfs_exec (g: graph) (o: option vertex) (H : {s : state | valid_dfs_state s g o})
+   {measure (measure_dfs (proj1_sig H))} : 
+  {s' : state | dfs_multi (proj1_sig H) s' /\ done' s' = true} :=
+  match H  with
+  | (g, f, f_times, d_times, n, remain_d, remain_f, st)   => exist _ (proj1_sig H) _ 
+  end.
+  
+(g, f, f_times, d_times, n, remain_d, remain_f, st)
+
+
+
+destruct H. destruct x. simpl. inversion v.
+Proof.
+  destruct H. simpl. apply (all_states_terminate) in v. apply v. destruct v. econstructor.
+
+
+ pose proof (all_states_terminate _ _ _ v). simpl.  econstructor. destruct H. split. destruct a. apply d. apply a.
+  simpl.
+  apply H. unfold sig.
+  
 
 (*Next steps: executable program, parentheses them, white path thm, reachability*)
 
