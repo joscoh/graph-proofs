@@ -96,6 +96,16 @@ Module Type Tree(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O Sg)
 
   Parameter tree_to_graph_3: forall t,
     P.acyclic (tree_to_graph t).
+
+  Parameter is_descendent_edge: forall t u v,
+    is_child t u v = true ->
+    is_descendent t u v = true.
+
+  Parameter is_descendent_trans: forall t u v w,
+    is_descendent t u v = true ->
+    is_descendent t v w = true ->
+    is_descendent t u w = true.
+    
 (*might need equal lemma to ensure it is acyclic but we will see*)
 End Tree.
      
