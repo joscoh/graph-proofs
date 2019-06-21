@@ -634,30 +634,32 @@ Qed.
 
 (*Preservation of times*)
 Lemma preserve_dtime_step: forall s s' v n g o,
-  valid_dfs_state s g o ->
-  M.find v (get_d_times s) = Some n ->
+  (valid_dfs_state s g o ->
+  M.find v (get_d_times s) = Some n) ->
   dfs_step s s' ->
-  M.find v (get_d_times s') = Some n.
+  (valid_dfs_state s' g o ->
+  M.find v (get_d_times s') = Some n).
 Proof.
-  intros. assert (A:=H1). induction H1; subst; simpl in *.
+  intros. assert (A:=H1). assert (valid_dfs_state s' g o). eapply step. apply H. apply A.
+   induction H1; subst; simpl in *.
   - destruct (O.eq_dec v x).
     + rewrite e in H0. assert (exists n, M.find x d_times = Some n) by (exists n; apply H0).
       remember (g0, f, f_times, d_times, time, remain_d, remain_f, (x, None) :: tl) as s.
-      assert (d_times = get_d_times s) by (subst; reflexivity). rewrite H3 in H2.
-      rewrite <- v_discovered_iff_not_remain in H2. subst; simpl in *.
-      rewrite H2 in H1. inversion H1. apply H. eapply remaining_in_graph.
+      assert (d_times = get_d_times s) by (subst; reflexivity). rewrite H4 in H3.
+      rewrite <- v_discovered_iff_not_remain in H3. subst; simpl in *.
+      rewrite H3 in H1. inversion H1. apply H. eapply remaining_in_graph.
       apply H. subst; simpl in *. left. apply S.mem_2. apply H1.
     + rewrite P.F.add_neq_o. apply H0. intuition.
   - destruct (O.eq_dec v x).
     + rewrite e in H0. assert (exists n, M.find x d_times = Some n) by (exists n; apply H0).
       remember (g0, t :: f, f_times, d_times, time, remain_d, remain_f, (x, Some y) :: tl) as s.
-      assert (d_times = get_d_times s) by (subst; reflexivity). rewrite H3 in H2.
-      rewrite <- v_discovered_iff_not_remain in H2. subst; simpl in *.
-      rewrite H2 in H1. inversion H1. apply H. eapply remaining_in_graph.
+      assert (d_times = get_d_times s) by (subst; reflexivity). rewrite H4 in H3.
+      rewrite <- v_discovered_iff_not_remain in H3. subst; simpl in *.
+      rewrite H3 in H1. inversion H1. apply H. eapply remaining_in_graph.
       apply H. subst; simpl in *. left. apply S.mem_2. apply H1.
     + rewrite P.F.add_neq_o. apply H0. intuition.
   - apply H0.
-  - apply IHdfs_step; try(assumption). 
+  - apply IHdfs_step; try(assumption).  
 
 (*tommorrow*) 
 
