@@ -925,3 +925,4 @@ Definition discovery_time (v: vertex) n
 (*Parentheses Theorem*)
 Lemma 
 *)
+End DFS.
