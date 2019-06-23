@@ -53,6 +53,9 @@ Module Type Tree(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O Sg)
     contains_vertex t u = true ->
     contains_vertex (add_child t u v) v = true.
 
+  Parameter add_child_6: forall t u v a,
+    contains_vertex (add_child t u v) a = true -> contains_vertex t a = true \/ a = v.
+
   Parameter singleton_1: forall v,
     root (singleton v) = Some v.
 
