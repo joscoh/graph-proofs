@@ -1675,12 +1675,482 @@ Proof.
   - destruct IHstack_desc. exists x0. apply H1.
 Qed.
 
+Lemma descendant_gray: forall s g o x y,
+  valid_dfs_state s g o ->
+  stack_desc s x y ->
+  gray s y = true.
+Proof.
+  intros. induction H0.
+  - eapply parent_gray. apply H. exists x. apply H0.
+  - eapply parent_gray. apply H. exists y. apply H1.
+Qed.
+
+Lemma descendant_implies_gray_at_start: forall s g o x y,
+  valid_dfs_state s g o ->
+  stack_desc s x y ->
+  Some (get_time s) = M.find x (get_d_times s) ->
+  gray s y = true.
+Proof.
+  intros. eapply descendant_gray. apply H. apply H0.
+Qed.
+
+Lemma parent_in: forall s g o x y,
+  valid_dfs_state s g o ->
+  In (x, Some y) (get_stack s) ->
+  exists z, In (y, z) (get_stack s).
+Proof.
+  intros. assert (gray s y = true). eapply parent_gray. apply H. exists x. apply H0.
+  eapply gray_on_stack. apply H. apply H1.
+Qed.
+
+Lemma in_split: forall (A: Type) (x: A) l,
+  In x l <->
+  exists l1 l2, l = l1 ++ x :: l2.
+Proof.
+  intros. induction l; split; intros; simpl in *.
+  - destruct H.
+  - destruct H. destruct H. destruct x0; inversion H.
+  - destruct H. subst. exists nil. exists l. reflexivity.
+    apply IHl in H. destruct H. destruct H. rewrite H. exists (a :: x0). exists x1. reflexivity.
+  - destruct H. destruct H. destruct x0. simpl in H. inversion H; subst. left. reflexivity.
+    inversion H. assert (exists l1 l2, l = l1 ++ x :: l2). exists x0. exists x1. assumption.
+    apply IHl in H0. right. rewrite <- H2. apply H0.
+Qed. 
+
+(*A vertex always comes after its parent on the stack*)
+Lemma parent_ordered: forall s g o x y,
+  valid_dfs_state s g o ->
+  In (x, Some y) (get_stack s) ->
+  exists l1 l2 l3 z, get_stack s = l1 ++ (x, Some y) :: l2 ++ (y, z) :: l3 /\ 
+  (forall o'', ~In (y,o'') (l1 ++ (x, Some y) :: l2)) /\ (forall a, ~In(a, Some y) l3).
+Proof.
+  intros. assert (gray s y = true). eapply parent_gray. apply H. exists x. apply H0.
+  assert (A:=H). eapply right_left_stacks in A. destruct A. destruct H2. apply H2 in H1.
+  clear H2. destruct H1. destruct H1. destruct H2. 
+  rewrite H1 in H0. apply in_app_or in H0. destruct H0.
+  + assert (B:=H0). apply in_split in H0. destruct H0. destruct H0. exists x3. exists x4.
+    exists x0. exists x1. split. rewrite H1. rewrite H0. rewrite <- app_assoc. reflexivity.
+    split.
+    setoid_rewrite <- H0. apply H2. apply H3.  
+  + simpl in H0. destruct H0.
+    * inversion H0; subst. exfalso. eapply neq_parent. apply H. rewrite H1. apply in_or_app.
+      right. left. reflexivity. reflexivity.
+    * exfalso. apply (H3 x). apply H0.
+Qed.
+
+Ltac destruct_all :=
+repeat(match goal with
+            |[H: (exists _, _) |- _] => destruct H
+            |[H: _ /\ _ |- _] => destruct H 
+            end; try(rewrite andb_true_iff in *)).
+
+Lemma app_match: forall (A: Type) (l1: list A) l2 l3 l4,
+  l1 ++ l2 = l3 ++ l4 ->
+  (exists x, l1 = l3 ++ x) \/ (exists x, l3 = l1 ++ x).
+Proof.
+  intros. revert H. revert l3. induction l1; intros; subst.
+  - right. exists l3. reflexivity.
+  - simpl in H. destruct l3; simpl in H.
+    left. exists (a :: l1). reflexivity. inversion H; subst.
+    apply IHl1 in H2. destruct H2.
+    + left. destruct H0. rewrite H0. exists x. reflexivity.
+    + right. destruct_all. exists x. rewrite H0. reflexivity.
+Qed.
+
+Lemma app_inv_rev_l: forall (A: Type) (l1 l2 l3: list A),
+  l1 = l2 -> l3 ++ l1 = l3 ++ l2.
+Proof.
+  intros. subst. reflexivity.
+Qed.
+
+Lemma app_inv_rev_r : forall (A: Type) (l1 l2 l3: list A),
+  l1 = l2 ->l1 ++ l3 = l2 ++ l3.
+Proof.
+  intros. subst. reflexivity.
+Qed.
+
+Lemma descendants_ordered: forall s g o x y,
+  valid_dfs_state s g o ->
+  stack_desc s x y ->
+  exists l1 l2 l3 z o', get_stack s = l1 ++ (x, Some z) :: l2 ++ (y, o') :: l3 /\ 
+  (forall o'', ~ In(y, o'') (l1 ++ (x, Some z) :: l2) ) /\ (forall a, ~In(a, Some y) l3).
+Proof.
+  intros. induction H0.
+  - eapply parent_ordered in H. destruct_all.  exists x0. exists x1. exists x2. exists y.
+    exists x3. split. apply H. split. apply H1. apply H2.  apply H0.
+  - specialize (IHstack_desc H). eapply parent_ordered in H1. destruct_all.
+    exists x0. assert (exists l1, x5 = x0 ++ l1).  rewrite H2 in H1.  assert (H7:=H1). apply app_match in H1.
+    destruct H1. destruct H1; subst. rewrite <- app_assoc in H7. apply app_inv_head in H7. 
+    destruct x9. inversion H7; subst. exfalso. eapply H3. simpl. apply in_or_app.
+    right. left. reflexivity. inversion H7; subst. exfalso. apply (H3 (Some z)). apply in_or_app.
+    left. apply in_or_app. right. left. reflexivity. apply H1.
+    destruct H7. subst. rewrite H2 in H1. rewrite <- app_assoc in H1. apply app_inv_head in H1.
+    destruct x9. inversion H1; subst. exfalso. apply (H3 (Some z)). apply in_or_app. right. left.
+    reflexivity. inversion H1; subst. assert (exists l1, x9 = x1 ++ l1). assert (A:=H9). apply app_match in H9.
+    destruct H9; destruct_all; subst. rewrite <- app_assoc in A. apply app_inv_head in A.
+    destruct x5. exists nil. repeat(rewrite app_nil_r). reflexivity. inversion A; subst.
+    exfalso. apply (H3 (Some z)). apply in_or_app. right. simpl. right. apply in_or_app.
+    right. left. reflexivity. exists x5. reflexivity. destruct_all. subst.
+    rewrite <- app_assoc in H9. apply app_inv_head in H9. destruct x5. inversion H9; subst.
+    exists (x1 ++ (y, Some z) :: x6). exists x7. exists x3. exists x8.
+    split. rewrite H2. rewrite <- app_assoc. reflexivity. rewrite app_nil_r in H5.
+    rewrite <- app_assoc in H5. split. apply H5. apply H6.
+    inversion H9; subst. exists (x1 ++ (y, x4) :: x5 ++ (y, Some z) :: x6). exists x7.
+    exists x3. exists x8. split. rewrite H2. repeat(rewrite <- app_assoc).
+    apply app_inv_rev_l.
+    assert ((y, x4) :: x5 ++ (y, Some z) :: x6 ++ (z, x8) :: x7 =
+   ((y, x4) :: x5 ++ (y, Some z) :: x6) ++ (z, x8) :: x7).
+    simpl. rewrite <- app_assoc. reflexivity. 
+    apply (app_inv_rev_l _ _ _ ((x, Some x3) :: x1)). simpl. rewrite <- app_assoc. reflexivity.
+    assert (((x0 ++ (x, Some x3) :: x1 ++ (y, x4) :: x5) ++ (y, Some z) :: x6) =
+    (x0 ++ (x, Some x3) :: x1 ++ (y, x4) :: x5 ++ (y, Some z) :: x6)). rewrite <- app_assoc.
+    simpl. rewrite <- app_assoc. simpl. reflexivity. setoid_rewrite <- H7. split. apply H5. apply H6. apply H.
+Qed.
+
+Lemma in_app_end: forall (A: Type) l1 (x y z : A) l2 l3,
+  l1 ++ x :: nil = l2 ++ y :: z :: l3 ->
+  In y l1.
+Proof.
+  intros. generalize dependent l1. induction l2; intros.
+  - simpl in H. destruct l1. simpl in H. inversion H. simpl in *.
+    inversion H. left. reflexivity.
+  - simpl in H. destruct l1.
+    + simpl in H. inversion H. destruct l2; inversion H2.
+    + simpl in H. inversion H; subst. simpl. right. apply IHl2. apply H2.
+Qed. 
+(*
+Lemma consecutive_stack_elts: forall s g o x y x' y' l1 l2,
+  valid_dfs_state s g o ->
+  get_stack s = l1 ++ (x, y) :: (x', y') :: l2 ->
+  y = y' \/ y = Some x'.
+Proof.
+  intros. generalize dependent l1. revert x y x' y' l2. induction H; intros; subst; simpl in *.
+  - destruct o. destruct (G.contains_vertex g v). destruct l1; inversion H0. destruct l1; inversion H2.
+    destruct l1; inversion H0. destruct l1; inversion H0.
+  - inversion H0; subst; simpl in *.
+    + assert (tl = nil). eapply root_nil. eapply step. apply H. apply H0. simpl.
+      reflexivity. subst. destruct l2. 
+      pose proof (app_inversion _ (x0, None) (x', y') (add_to_stack x0 g0 remain_d) (l1 ++ (x,y) :: nil)).
+      destruct H4. rewrite <- app_assoc. simpl. apply H1. inversion H5; subst.
+      right. eapply add_to_stack_adds_parent. rewrite H4. apply in_or_app. right. left. reflexivity.
+      assert (In (x,y) (add_to_stack x0 g0 remain_d)). eapply in_app_end in H1. apply H1.
+      assert (In (x', y') (add_to_stack x0 
+      apply add_to_stack_adds_parent in H4.  
+ simpl. rewrite H1.
+      apply app_inversion in H1. simpl in H1. assert (A:=H1). eapply app_match in H1.
+      destruct H1. destruct H1. rewrite H1 in A. rewrite <- app_assoc in A.
+      apply app_inv_head in A. destruct x1. inversion A; subst.
+       subst. inversion H2.  generalize dependent l2.
+*)
+
+
+Lemma no_cycles: forall s g o x y,
+  valid_dfs_state s g o ->
+  stack_desc s x y ->
+  ~stack_desc s y x.
+Proof.
+  intros.  intro. eapply descendants_ordered in H0.
+  eapply descendants_ordered in H1. destruct_all.
+  rewrite H1 in H0. assert (A:=H0).
+  apply app_match in H0. destruct H0; destruct_all; subst.
+  rewrite <- app_assoc in A. apply app_inv_head in A. destruct x10; inversion A; subst.
+  apply (H2 (Some x8)). apply in_or_app. right. left. reflexivity.
+  apply (H2 (Some x8)). apply in_or_app. left. apply in_or_app. right. left. reflexivity.
+   simpl. rewrite <- app_assoc in A. apply app_inv_head in A. destruct x10; inversion A; subst.
+    apply (H2 (Some x8)). apply in_or_app. right. left. reflexivity.
+    apply (H4 (Some x3)). apply in_or_app. left. apply in_or_app. right. left. reflexivity.
+    all: apply H.
+Qed. 
+
+
+Fixpoint sublist (A: Type) (l: list A) (n: nat) :=
+  match l with
+  | nil => nil
+  | x :: t => if ge_dec n (length l) then l else sublist _ t (n)
+  end.
+
+Lemma sublist_length: forall (A: Type) (l: list A),
+  sublist _ l (length l) = l.
+Proof.
+  intros. destruct l. simpl. reflexivity. simpl.  destruct (ge_dec (S (length l)) (S (length l))) eqn : ?.
+  reflexivity. omega.
+Qed.
+
+Lemma sublist_nil: forall (A: Type)(l:list A),
+  sublist _ l 0 = nil.
+Proof.
+  intros. induction l. simpl. reflexivity. simpl. apply IHl.
+Qed. 
+(*
+Lemma sublist_cons: forall (A: Type) (l: list A) x n,
+  sublist _ 
+
+Check sublist_nil.
+
+Fixpoint list_ind_alt (A: Type) (l: list A) (P: list A -> Prop) (base: P (sublist _ 1 0))
+  (base': P nil) (ind: forall n,
+  P (sublist _ l n) -> P(sublist _ l (n+1))) : P ( sublist _ l (length l)) :=
+  match l as l0 return P l0 with
+  | nil => base'
+  | x :: t => 
+
+fun (A : Type) (P : list A -> Prop) (f : P nil) (f0 : forall (a : A) (l : list A), P l -> P (a :: l)) =>
+fix F (l : list A) : P l := match l as l0 return (P l0) with
+                            | nil => f
+                            | y :: l0 => f0 y l0 (F l0)
+                            end
+*)
+Lemma list_ind_alt: forall (A: Type) (P: list A -> Prop),
+  forall l,
+  P nil ->
+  (forall n, P (sublist _ l n) -> P(sublist _ l (n+1))) ->
+  P l.
+Proof.
+  intros. erewrite <- sublist_nil in H.   rewrite <- sublist_length.  induction (length l).
+  - apply H. 
+  - apply H0 in IHn. assert (S n = n + 1) by  omega. rewrite H1. apply IHn.
+Qed. 
+   
+   
+
+Lemma sublist_cons: forall A (x: A) l n,
+  n < length (x :: l) ->
+  sublist _ (x::l) n = sublist _ l n.
+Proof.
+  intros. simpl in *. assert (~ n >= S (length l)) by omega.
+  destruct (ge_dec n (S (length l)))  eqn : ?. omega. reflexivity.
+Qed.
+
+Lemma sublist_ge: forall A (l: list A) n,
+  n >= length l ->
+  sublist _ l n = l.
+Proof.
+  intros. destruct l. reflexivity. simpl in *.
+  destruct (ge_dec n (S (length l))) eqn : ?. reflexivity. omega.
+Qed.
+
+Lemma sublist_app: forall (A: Type) (l1: list A) l2 n,
+  l1 = sublist _ l2 n ->
+  exists x, x ++ l1 = l2.
+Proof.
+  intros. generalize dependent l1. induction l2; intros; subst.
+  - exists nil. reflexivity.
+  - simpl. destruct (ge_dec n (S (length l2))).
+    + exists nil. reflexivity.
+    + specialize (IHl2 (sublist A l2 n)). destruct IHl2. reflexivity.
+      exists (a :: x). simpl. rewrite H. reflexivity.
+Qed.
+
+Lemma sublist_plus_one: forall (A: Type) (l: list A) n x l1,
+  sublist _ l (n+1) = x :: l1 ->
+  (sublist _ l n = x :: l1 \/ sublist _ l n = l1).
+Proof.
+  intros. induction l.
+  - simpl in H. inversion H.
+  - simpl in *. destruct (ge_dec n (S (length l))).
+    + destruct (ge_dec (n + 1) (S (length l))) eqn : ?.
+      * inversion H; subst. left. reflexivity.
+      * omega.
+    + destruct (ge_dec (n + 1) (S (length l)) ).
+      * assert (n = length l) by omega. rewrite H0. right. inversion H; subst.
+        apply sublist_length.
+      * apply IHl. apply H.
+Qed.
+
+ 
+Lemma left_of_stack_descendant: forall s g o x y l1 l3 o'',
+  valid_dfs_state s g o ->
+  get_stack s = l1 ++ (y, o'') :: l3 ->
+  x <> y ->
+  ((exists o, In (x, o) l1) ->
+  stack_desc s x y).
+Proof.
+  intros. revert H2.  revert H1. revert x. apply (list_ind_alt _ (fun l => forall l1,
+  l = l1 ++ (y, o'') :: l3 -> forall x : O.t,
+x <> y ->
+((exists o0 : option O.t, In (x, o0) l1) -> stack_desc s x y)) (get_stack s)).
+  - intros. destruct l0; inversion H1.
+  - intros. assert (A:=H2). symmetry in H2. apply sublist_app in H2. destruct H2. rewrite <- H2 in H0.
+    destruct H4. destruct x1. (*none case will be false*)
+    assert (gray s t = true). eapply parent_gray. apply H. exists x. rewrite <- H2.
+    apply in_or_app. right. apply in_or_app. left. apply H4. 
+    assert (B:=H). eapply right_left_stacks in H. destruct_all. apply H in H5. clear H. destruct_all.
+    assert (C:=H2).
+    rewrite H in H2. assert(D:=H2). apply app_match in H2. destruct H2; destruct_all; subst.
+    + rewrite <- app_assoc in D. apply app_inv_head in D. assert (x4 = nil).
+      destruct x4. reflexivity. inversion D; subst. exfalso. apply (H6 x). apply in_or_app.
+      right. apply in_or_app. left. apply H4. subst. simpl in *.
+      destruct l0. inversion H4. inversion D; subst. destruct H4. inversion H2; subst.
+      exfalso. eapply neq_parent. apply B. rewrite <- C. apply in_or_app.  right. apply in_or_app.
+      left. left. reflexivity. reflexivity.
+      exfalso. apply (H6 x). apply in_or_app. left. apply H2.
+    + rewrite <- app_assoc in D. apply app_inv_head in D. assert (E := D). apply app_match in D.
+      destruct D; destruct_all; subst.
+      * rewrite <- app_assoc in E. apply app_inv_head in E. destruct x3; inversion E; subst.
+        apply parent. rewrite H. apply in_or_app. left. apply in_or_app. right. rewrite app_nil_r in H4. apply H4.
+        apply in_app_or in H4. destruct H4. destruct x0; simpl in *.
+        destruct x4; simpl in *. destruct H2. assert (F:=A). apply sublist_plus_one in A.
+        destruct A. destruct (O.eq_dec t y). unfold O.eq in e. subst.
+        apply parent. rewrite H. simpl. destruct H2. left. apply H2. right. apply in_or_app.
+        left. apply H2. eapply stack_desc_trans. apply parent. rewrite H. simpl.
+        destruct H2. left. apply e. right. apply in_or_app. left. apply i. apply 
+        (H1 (p :: (x4 ++ (t, x2) :: x3))). simpl. apply H4. apply n0. exists x2.
+        simpl. right. apply in_or_app. right. left. reflexivity.
+        destruct (O.eq_dec y t). unfold O.eq in e. subst. apply parent.
+        rewrite H. simpl. destruct H2. left. apply H2. right. apply in_or_app. left. assumption.
+        eapply stack_desc_trans. apply parent. rewrite H. simpl. destruct H2. left. apply e.
+        right. apply in_or_app. left. apply i. apply (H1 (x4 ++ (t, x2) :: x3)).
+        apply H4. intuition. exists x2. apply in_or_app. right. left. reflexivity.
+        destruct x4. inversion H2. simpl in A.
+         apply sublist_plus_one in A. destruct A.
+        apply (H1 (p0 :: (x4 ++ (t, x2) :: x3))). apply H4. apply H3. exists (Some t).
+        simpl. destruct H2. left. assumption. right. apply in_or_app. left. apply H2.
+        simpl in H2. destruct (O.eq_dec y t). unfold O.eq in e. subst.
+        apply parent. rewrite H. destruct H2. simpl. right. apply in_or_app.
+        left. apply in_or_app. right. left. apply H2. simpl. right. apply in_or_app.
+         left. apply in_or_app. right. right. apply H2.
+        eapply stack_desc_trans. apply parent. rewrite H. destruct H2. simpl. right. apply in_or_app.
+        left. apply in_or_app. right. left. apply e. simpl. right. apply in_or_app. left. apply in_or_app.
+        right. right. assumption. apply (H1 (x4 ++ (t, x2) :: x3)). apply H4. intuition.
+        exists x2. apply in_or_app. right. left. reflexivity.
+        simpl in H2. destruct H2. inversion H2; subst.
+        exfalso. eapply neq_parent. apply B. rewrite H. apply in_or_app. right. left. reflexivity.
+        reflexivity. exfalso. apply (H6 x). apply in_or_app. left. apply H2.
+      * rewrite <- app_assoc in E. apply app_inv_head in E.
+        destruct (O.eq_dec y t). unfold O.eq in e. subst.
+        apply parent. rewrite H. apply in_or_app. left. apply in_or_app. right.
+        apply in_or_app. left. apply H4. destruct l0. inversion H4. simpl in A.
+        apply sublist_plus_one in A. destruct A.
+        -- eapply stack_desc_trans. apply parent. rewrite H. destruct H4. apply in_or_app.
+           left. apply in_or_app. right. simpl. left. apply e. apply in_or_app. left.
+           apply in_or_app. right. simpl. right. apply in_or_app. left. apply i.
+           destruct x3. inversion E; subst. exfalso. apply n0. reflexivity.
+           inversion E; subst. (*pick up here tomorrow, maybe try stronger claim (I might need it)*)
+            (*Also think through and make niver proof - try to automate finidhing item*)
+           apply (H1  apply e.
+            right. left. apply e.
+
+
+ apply H2.
+        apply (H1 ((x4 ++ (t, x2) :: x3))). apply H4. apply H3. exists (Some t).
+
+
+ rewrite <- app_assoc. simpl.
+        rewrite <- app_assoc. simpl. apply H4.
+        inversion 
+        
+        simpl.
+        contradiction.  rewrite  app_assoc.
+        apply H4.
+        simpl in E. 
+        destruct x4; simpl in *. destruct H4. apply sublist_plus_one in A. destruct A.
+        --  apply parent. rewrite <- C. apply in_or_app. right.
+           simpl. destruct H4. left. apply e. right. apply in_or_app. left. apply i.
+             
+          
+         rewrite H in A. destruct x0; simpl in *. destruct (ge_dec (n + 1) (S (length (x4 ++ (t, x2) :: x1)))).
+         destruct H4. inversion H2; subst. 
+         
+      
+ des
+
+
+
+ rewrite H0 in H2. destruct l1; simpl in *.
+    + destruct (lt_dec n (length (get_stack s))). rewrite H0 in l. simpl in l.
+      destruct (ge_dec (n + 1) (S (length l3))). destruct l0; inversion H2; subst.
+      destruct H4. inversion H4. assert (l3 = (l0 ++ (y,o'') :: nil) ++ l3).
+      simpl. rewrite <- app_assoc. simpl. apply H7. apply list_app_neq in H5. destruct H5.
+      intro. destruct l0; inversion H6. 
+
+list_app_neq
+      
+
+destruct l0; inversion H2.
+      
+      
+      destruct l0. destruct H4. inversion H4. simpl in *.
+      inversion H2; subst. destruct H4. destruct H4. inversion H4; subst. contradiction.
+      eapply H1.
+
+
+
+ rewrite   
+
+(*not true - things before you could be your siblings - can only prove that everything 
+  before you is not a descendant, but it is not an ancestor*)
+Lemma left_of_stack_descendant: forall s g o x y l1 l3 o'',
+  valid_dfs_state s g o ->
+  get_stack s = l1 ++ (y, o'') :: l3 ->
+  x <> y ->
+  ((exists o, In (x, o) l1) ->
+  stack_desc s x y) /\ ((exists o, In (x, o) l3) -> ~stack_desc s x y).
+Proof.
+  intros. revert H1. revert x. apply (list_ind_alt _ (fun l => forall l1 l3,
+  l = l1 ++ (y, o'') :: l3 -> forall x : O.t,
+x <> y ->
+((exists o0 : option O.t, In (x, o0) l1) -> stack_desc s x y) /\
+((exists o0 : option O.t, In (x, o0) l3) -> ~ stack_desc s x y)) (get_stack s)).
+  - intros. destruct l0; inversion H1.
+  - intros. rewrite H0 in H2. destruct l1; simpl in *.
+    + destruct (n+1 =? 0). destruct l0; inversion H2.
+      destruct l0; simpl in *; inversion H2; subst.
+      * split. intros. destruct H4. destruct H4.
+        
+      *  
+   
+
+
+ induction l1; intros; subst; simpl in *.
+  - split; intros. destruct H2. destruct H2. intro. eapply descendants_ordered in H3.
+    destruct_all. rewrite H3 in H0. destruct x0; inversion H0; subst.
+    apply (H4 (Some x3)). simpl. left. reflexivity.
+    apply (H4 o''). apply in_or_app. left. left. reflexivity. apply H.
+  - split; intros.
+    + destruct H2. destruct H2.
+      * inversion H2; subst. 
+
+(*idea: modified induction principle: if I have a claim true for 1 element in the stack and 
+if it is true for an element, it is true for the next element, then it is true for all elements in the stack*)
+
+
+ revert H2. revert H1.
+    remember ((y, o'') :: l3) as l. induction l. inversion Heql. inversion Heql; subst. generalize dependent y. revert o''. induction l3; intros; subst.
+    + destruct H2. inversion H2.
+    + destruct H2. simpl in H2. destruct H2. inversion H2; subst. intro.
+      eapply descendants_ordered in H2. destruct_all. rewrite H2 in H0.
+      destruct x1. inversion H0; subst. contradiction. inversion H0; subst.
+      apply (H4 o''). apply in_or_app. left. left. reflexivity. apply H.
+      
+
+
+
+ destruct H1. destruct H1.
+  - destruct H2. destruct H2. inversion H2; subst.
+    assert (gray s y = true). Search gray. eapply gray_on_stack.
+
+ revert H0. revert x y. revert l2 l3 o' o''. revert x y. remember  induction l1; intros; subst; simpl in *.
+  - 
+  induction H; intros; subst; simpl in *.
+  - destruct o. destruct (G.contains_vertex g v). destruct l1. inversion H0. destruct l2; inversion H3.
+    inversion H0. destruct l1; inversion H2. destruct l1; inversion H0. destruct l1; inversion H0.
+  - inversion H0; subst; simpl in *.
+    + destruct (O.eq_dec x0 x).
+      * unfold O.eq in e. subst.  
+
+
+Lemma gray_at_start_implies_desc: forall s g o x y,
+  valid_dfs_state s g o ->
+  Some (get_time s ) = M.find x (get_d_times s) ->
+  gray s y = true ->
+  stack_desc s x y.
+
 Lemma right_left_stacks': forall s g o v,
   valid_dfs_state s g o ->
   exists tl o',
   gray s v = true ->
   (exists l1, get_stack s = l1 ++ (v,o') :: tl /\ (forall o'', ~In (v, o'') l1) /\
-  (forall y, ~In (y, Some v) tl) /\ (forall x, stack_desc s x v <-> exists p, In (x,p) l1)).
+  (forall y, ~In (y, Some v) tl) /\ (forall x, (exists p, In (x,p) l1) -> stack_desc s x v)).
 Proof.
   intros. unfold gray in *. induction H; subst; simpl in *.
   - destruct o. destruct (G.contains_vertex g v0) eqn : ?.
@@ -1692,17 +2162,8 @@ Proof.
     subst. destruct (O.eq_dec x v). 
       * unfold O.eq in e. subst. exists nil. exists None. intros. exists (add_to_stack v g0 remain_d).
         split. reflexivity. intros. split. intros. intro. apply add_to_stack_neq in H5. contradiction.
-        split. intros. intro. inversion H5. intros; split; intros. apply stack_desc_has_child in H5; simpl in *.
-        destruct H5. exists (Some v). apply in_app_or in H5. destruct H5. apply H5. simpl in H5.
-        destruct H5; inversion H5. destruct H5. destruct H5. apply stack_desc_has_child in H5; simpl in *.
-        destruct H5. apply in_app_or in H5. destruct H5. apply add_to_stack_adds_parent in H5.
-        inversion H5; subst. exfalso. eapply neq_parent. eapply step. apply H. apply H0. simpl.
-        apply H6. reflexivity. simpl in H5. destruct H5; inversion H5. destruct H5. destruct H5.
-        apply in_app_or in H7. destruct H7. apply add_to_stack_adds_parent in H7. inversion H7; subst.
-        exfalso. eapply neq_parent. eapply step. apply H. apply H0. simpl. apply H6. reflexivity.
-        destruct H7; inversion H7. destruct H5. eapply parent. simpl. 
-        assert (x2 = Some v). eapply add_to_stack_adds_parent. apply H5. subst. apply in_or_app.
-        left. apply H5. 
+        split. intros. intro. inversion H5. intros. eapply parent. destruct H5. assert (A:=H5).
+        apply add_to_stack_adds_parent in H5. subst. simpl. apply in_or_app. left. apply A.
       * (*doesn't matter, this is impossible*)
         exists nil. exists None. intros. remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s.
        assert (exists o, In (v, o) (get_stack s)). eapply gray_on_stack. apply H.
@@ -1726,29 +2187,7 @@ Proof.
          subst; simpl. destruct (pop_stack st remain_f) eqn : ?.
         -- simpl in H2. destruct (S.min_elt remain_d). inversion H2; subst. inversion H2.
         -- simpl in H2. rewrite <- H2 in Heqs. eapply in_pop_rev. rewrite Heqs. right. apply H6.
-        -- split. apply H6. intros; split; intros.
-          ++ apply stack_desc_has_child in H7; simpl in H7. destruct H7.
-             apply in_app_or in H7. destruct H7. exists (Some v). apply H7.
-             simpl in H7. destruct H7. inversion H7; subst. rewrite e in H2.
-             exfalso. eapply neq_parent. eapply step. apply H. apply H0. simpl. apply in_or_app.
-             right. left. reflexivity. apply e. specialize (H6 x2). contradiction.
-             destruct H7. destruct H7. apply stack_desc_child in H7. destruct H7; simpl in *.
-             apply in_app_or in H8. destruct H8. assert (B:=H8). apply add_to_stack_adds_parent in H8. inversion H8; subst.
-             apply in_app_or in H7. destruct H7. assert (A:=H7). apply add_to_stack_adds_parent in H7. inversion H7; subst.
-             exfalso. eapply neq_parent. eapply step. apply H. apply H0. simpl. apply in_or_app.
-              left. apply B. reflexivity.
-             remember (g0, T.add_child t y x :: f, f_times, M.add x (time + 1) d_times, time + 1, S.remove x remain_d, remain_f,
-       add_to_stack x g0 remain_d ++ (x, Some y) :: tl) as s.
-             assert (gray s x3 = true). eapply parent_gray. eapply step. apply H. subst. apply H0.
-              subst. simpl. exists x4. apply in_or_app. right. apply H7. 
-              assert (B':=B). apply only_add_yet_to_be_discovered in B.
-              apply add_to_stack_neq in B'. unfold gray in H9. subst; simpl in *.
-              rewrite andb_true_iff in H9. destruct H9. rewrite P2.FM.remove_neq_b in H9.
-              rewrite B in H9. inversion H9. intuition. simpl in H8. destruct H8.
-              inversion H8; subst. unfold O.eq in e. subst. exfalso. eapply neq_parent.
-              eapply step. apply H. apply H0. simpl. apply in_or_app. right. left. reflexivity.
-              reflexivity. specialize (H6 x3). contradiction.
-            ++ eapply parent. simpl. destruct H7. apply in_or_app. left.
+        -- split. apply H6. intros. eapply parent. simpl. destruct H7. apply in_or_app. left.
                assert (A:=H7). apply add_to_stack_adds_parent in H7. subst. rewrite <- e. apply A.  
       * exists x0. exists x1. intros. destruct H3.
         rewrite P2.FM.remove_neq_b in H4. apply H4. apply n.
@@ -1764,7 +2203,12 @@ Proof.
         destruct H3. destruct H6. apply (H6 o''). eapply in_pop_rev. apply H5.
         split. apply H5. assert (forall y0 : S.elt, ~ In (y0, Some v) x0) .
         intros. intro. destruct H3. destruct H7. destruct H8. apply (H8 y0). apply H6. split. apply H6.
-        intros. split; intros.
+        intros. destruct H7. apply in_app_or in H7. destruct H7.
+        ++ destruct H3. destruct H8. destruct H9. eapply stack_desc_trans. eapply parent.
+          simpl. apply in_or_app. left. assert (A:=H7). apply add_to_stack_adds_parent in H7. subst.
+          apply A. apply H10. apply H7.
+
+ split; intros.
         ++ apply stack_desc_has_child_rev in H7; simpl in H7; destruct H7.
           ** destruct H3. destruct H8. destruct H9. apply in_app_or in H7. destruct H7.
              apply add_to_stack_adds_parent in H7. inversion H7; subst. exfalso. apply n. reflexivity.
@@ -1781,7 +2225,9 @@ Proof.
             exfalso. eapply neq_parent. eapply step. apply H. apply H0. simpl.
             apply in_or_app. right. simpl. right. apply in_or_app. right. left. reflexivity. reflexivity.
             specialize (H9 x3). contradiction. simplify.
-          ** destruct H7. destruct H7. apply stack_desc_child_first in H7. destruct H7; simpl in H7.
+          ** (*pick up here tomorrow almost donw tih this*)
+
+ destruct H7. destruct H7. apply stack_desc_child_first in H7. destruct H7; simpl in H7.
              
 
 
