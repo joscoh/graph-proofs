@@ -1,0 +1,115 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{listings}
+ 
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}[theorem]{Lemma}
+\title{DFS Proofs}
+\author{Josh Cohen}
+
+\begin{document}
+\maketitle
+\section{Parenthesis Theorem}
+\begin{lemma}
+If $(x, \text{Some } y)$ is on the stack, then the stack looks like
+\begin{lstlisting}[language=Caml][Objective]
+l1 ++ (x, Some y) ++ l2 ++ (y,o) :: tl
+\end{lstlisting}
+And for every $(u, \text{Some t})$ in $l2$, $t=y$.
+\end{lemma}
+\begin{proof}
+When a vertex $(a,b)$ is added, this is clearly true when $(a,b)=(y,o)$. It is true for the rest of the list (and in all other cases) by induction.
+\end{proof}
+\begin{lemma}
+When $v$ is gray, the stack looks like
+\begin{lstlisting}[language=Caml][Objective]
+l1 ++ (v, o) :: l2
+\end{lstlisting}
+Furthermore, $l1$ does not contain $v$ (proved), $l2$ does not contain $(x, \text{Some }v)$ for any $x$ (proved), and if $o=\text{Some }y$, then $l1$ does not contain $y$ as a parent or a child. 
+\end{lemma}
+\begin{proof}
+By induction on dfs-step. The claim is trivially true if we add $(x, None)$ (since the rest of the stack is empty). Thus, assume we are adding $(x, \text{Some }p$). If $(x, \text{Some }p$)= $(v, \text{Some }y)$, then the claim is true, since we do not add $p$ as a child (it must be gray), and the parents are all $p$ ($p\neq x$ since $(x, \text{Some } x)$ never appears in the stack. Otherwise, if $(v, \text{Some }y)$ occurs on the left part of the stack, then we have a contradiction, since $v$ is gray. If it appears on the right, then once again $y$ is not added as a child because it is gray, and it is not added as a parent because 
+
+ When we add a new vertex (trivial in case where we add $(x, None)$), We know that $l1$ does not contain the parent of 
+\end{proof}
+
+
+
+
+Known Results:
+\begin{lemma}
+$\forall$ $x$, $u$, if $(x, Some(u))$ is on the stack, then $u$ is gray.
+\end{lemma}
+\begin{lemma}
+$\forall u$, if $u$ is gray, then $u$ is on the stack.
+\end{lemma}
+Results to prove:
+\begin{lemma}
+$\forall x~y$, if $(x, Some y)$ is on the stack, then the stack looks like
+\[l1 ++ (x, Some y) ++ l2 ++ (y, o) ++ l3\]
+Where every element of $l2$ is of the form $(z, Some y)$ for some $z$.
+\end{lemma}
+\begin{proof}
+By induction on the valid state relation.
+\\The base case is trivial because $(x, Some y)$ cannot be on the stack.
+\\If we took a step, then we had 3 cases:
+\\If the last step was dfs-discover-root, then the stack must be
+\[l1 ++ (x, Some y) ++ l2 ++ (y, None) :: nil\]
+And by the adding children function (add-to-stack), the claim is true.
+\\If the last step was dfs-discover-child, then the stack must be
+\[(\text{children of z}) ++ (z, Some u) ++ tl\]
+We know that $(x, Some y)$ is on the stack. If it is in the children section, then $y=z$ and the claim is true. If it is $(z, Some u)$ or in $tl$, then it is true by induction, since this part of the stack has not changed.
+\\Finally, if the last step was dfs-finish, then the claim is true by induction.
+\end{proof}
+\begin{lemma}
+$\forall s (state), u$, if $u$ is gray, then the stack looks like
+\[l1 ++ (u, o) ++ l2\]
+For some $o$. We have the following properties:
+\begin{enumerate}
+\item
+$u$ is not in $l1$
+\item
+$u$ does not appear as a parent in $l2$ (ie, $(x,Some~u)$ is not in $l2$ for any $x$)
+\item
+If $o=Some~y$, then $y$ does not appear as either a parent or child in $l1$.
+\item
+If $v$ is in $l1$ and $v$ is gray, then $v$ is a descendant of $u$ in the DFS forest
+\end{enumerate}
+\end{lemma}
+\begin{proof}
+We proceed by induction on the claim that $s$ is a valid state. In the start state, this is trivial, since there are no gray vertices.
+\\Then, assume it holds for state $s$ and we want to show that it holds for state $s'$ such that $dfs-step~s~s'$ holds.
+\begin{enumerate}
+\item
+If the last step taken was a discover-root, then we know the stack looks like
+\[l1 ++ (x, None) :: nil\]
+Then, it must be the case that $x=u$ because it is the only gray vertex on the stack. Then $x$ is not in $l1$ (because we do not add the same vertex to the children added to the stack - proved), proving claim $a$. $l2$ is empty, so $b$ is true. $o=None$, so $c$ is vacuously true. Finally, there are no other gray vertices, so $d$ is vacuously true.
+\item
+If the last step taken was a discover-child, then the stack looks like
+\[ \text{(children of x)} ++ (x, Some~y) ++ tl\]
+where 
+\[(s, Some~y) ++ tl = \text{remove-black } st \]
+Where $st$ was the previous stack.
+\\Then, we proceed by cases:
+\\Case 1: $u=x$. Then $a$ is true by the behavior of adding children. $b$ must be true because if $Some~u$ were in $tl$, then, $u$ would have been gray in the previous state, a contradiction. We know that $y$ must be gray (proved), so it is not added to the children of $x$. Thus, $c$ is true (since all added vertices have a parent $x$). Finally, $d$ is again true vacuously.
+\\Case 2: $u\neq x$.
+\\Then, the stack must look like
+\[ \text{(children of x)} ++ (x, Some~y) ++ l1 ++ (u, o) ++ tl\]
+We do not add $u$ to the children of $x$ (since it is gray) and $u\neq u$. $u$ is not in $l1$ by induction, so $a$ is true.
+\\$b$ is true by induction (since $tl$ has not changed)
+\\
+\\Then, we proceed by cases:
+\\Case 2.1: $u=y$. In this case, 
+\end{enumerate}
+\end{proof}
+\begin{theorem}
+$\forall u, v, G$, if $u\in G$ and $v\in G$, then $d(u) < d(v) < f(v) < f(u)$, $d(v) < d(u) < f(u) < f(v)$, $d(u) < f(u) < d(v) < f(v)$, or $d(v) < f(v) < d(u) < f(u)$.
+\end{theorem}
+\begin{proof}
+It suffices to show that if $d(u) < d(v) < f(u)$, then $f(v) < f(u)$. (We know that $f(v) > d(v)$ already. If the above inequality holds, then at time $d(v)$, it must be the case that $u$ is gray. 
+\end{proof}
+\end{document}
