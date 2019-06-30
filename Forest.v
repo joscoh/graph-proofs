@@ -18,7 +18,7 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
   Parameter add_root: forest -> vertex -> forest.
 
   Parameter contains_vertex: forest -> vertex -> bool.
-
+  (*Input: forest, parent, child*)
   Parameter add_child : forest -> vertex -> vertex -> forest.
 
   Parameter is_child: forest -> vertex -> vertex -> bool.
@@ -26,12 +26,12 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
   (*Parameter get_children: forest -> vertex -> option (list vertex).*)
 
   Parameter forest_to_graph: forest -> G.graph.
-
-  Parameter is_descendent: forest -> vertex -> vertex -> bool.
+  (*Input: forest, ancestor, descendant*)
+  Parameter is_descendant: forest -> vertex -> vertex -> bool.
 
   Definition is_parent f u v := is_child f v u.
 
-  Definition is_ancestor f u v := is_descendent f v u.
+  Definition is_ancestor f u v := is_descendant f v u.
 
   (*Parameter equal: tree -> tree -> bool.*)
 
@@ -71,6 +71,9 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
   Parameter add_root_2: forall f u v,
     contains_vertex f v = true ->
     contains_vertex (add_root f u) v = true.
+
+  Parameter add_root_3: forall f u v,
+    contains_vertex (add_root f u) v = true -> u = v \/ contains_vertex f v = true.
 
 (*
   Parameter singleton_1: forall v,
@@ -115,14 +118,18 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
   Parameter tree_to_graph_3: forall t,
     P.acyclic (forest_to_graph t).
 
-  Parameter is_descendent_edge: forall t u v,
+  Parameter is_descendant_edge: forall t u v,
     is_child t u v = true ->
-    is_descendent t u v = true.
+    is_descendant t u v = true.
 
-  Parameter is_descendent_trans: forall t u v w,
-    is_descendent t u v = true ->
-    is_descendent t v w = true ->
-    is_descendent t u w = true.
+  Parameter is_descendant_trans: forall t u v w,
+    is_descendant t u v = true ->
+    is_descendant t v w = true ->
+    is_descendant t u w = true.
+
+  Parameter is_descendant_1: forall t u v a b,
+    is_descendant t u v = true ->
+    is_descendant (add_child t a b)  u v = true.
     
 (*might need equal lemma to ensure it is acyclic but we will see*)
 End Forest.
