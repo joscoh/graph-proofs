@@ -1675,11 +1675,6 @@ Proof.
       * unfold O.eq in e. subst. apply IHvalid_dfs_state. apply H1. rewrite H3. reflexivity.
       * rewrite P2.FM.remove_neq_b in H2. apply IHvalid_dfs_state. apply H1. apply H2. apply n.
 Qed. 
- 
-(*TODO:Plan*)
-(*Prove this*)
-(*Prove that white <-> not in tree (contrapositive might be easier for other way around*)
-(*or gray -> in tree and in tree at t1 -> in tree at t2, so holds for black*)
 
 (*An important lemma: If a vertex is gray, we can split the stack into two parts: the
   left does not have v as a child anywhere, and the right does not have v as a parent anywhere.
@@ -1789,83 +1784,6 @@ Proof.
             ++ apply H7.
        -- intuition.
 Qed. 
-
-(*
-(*An important lemma: If a vertex is gray, we can split the stack into two parts: the
-  left does not have v as a child anywhere, and the right does not have v as a parent anywhere.
-  This will helper prove many other lemmas about the stack.*)
-Lemma right_left_stacks: forall s g o v,
-  valid_dfs_state s g o ->
-  exists tl o',
-  gray s v = true ->
-  (exists l1, get_stack s = l1 ++ (v,o') :: tl /\ (forall o'', ~In (v, o'') l1) /\
-  (forall y, ~In (y, Some v) tl)).
-Proof.
-  intros. unfold gray in *. induction H; subst; simpl in *.
-  - destruct o. destruct (G.contains_vertex g v0) eqn : ?.
-    + exists nil. exists None. intros. simplify. rewrite H1 in H0. inversion H0.
-    + exists nil. exists None. intros. simplify. rewrite H1 in H0. inversion H0.
-    + exists nil. exists None. intros. simplify. rewrite H1 in H0. inversion H0.
-  - inversion H0; subst; simpl in *; destruct IHvalid_dfs_state.
-    + destruct H3. assert (tl = nil). eapply root_nil. eapply step. apply H. apply H0. simpl. reflexivity.
-    subst. destruct (O.eq_dec x v). 
-      * unfold O.eq in e. subst. exists nil. exists None. intros. exists (add_to_stack v g0 remain_d).
-        split. reflexivity. intros. split. intros. intro. apply add_to_stack_neq in H5. contradiction.
-        intros. intro. inversion H5.
-      * (*doesn't matter, this is impossible*)
-        exists nil. exists None. intros. remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s.
-       assert (exists o, In (v, o) (get_stack s)). eapply gray_on_stack. apply H.
-       unfold gray; subst; simpl in *. simplify. rewrite P2.FM.remove_neq_b in H5. apply H5. intuition.
-       subst; simpl in *. destruct H5. destruct (pop_stack st remain_f) eqn : ?.
-       -- simpl in H2. rewrite pop_stack_nil in Heqs. specialize (Heqs (v, x2)).
-          simpl in Heqs. apply Heqs in H5. simplify. rewrite H5 in H7. inversion H7.
-       -- simpl in H2. inversion H2; subst. eapply (pop_stack_delete _ remain_f) in H5.
-          destruct H5. simplify. rewrite H7 in H5. inversion H5.
-          rewrite Heqs in H5. simpl in H5. destruct H5. inversion H5. subst. simplify. exfalso. apply n.
-          reflexivity. destruct H5.
-    + destruct H3. destruct (O.eq_dec x v).
-      * exists tl. exists (Some y). intros. exists (add_to_stack x g0 remain_d). split. 
-        rewrite e. reflexivity. intros. split. intros. intro. apply add_to_stack_neq in H5. rewrite e in H5.
-        contradiction. intros. intro. rewrite e in H1. 
-        remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s.
-        assert (white s v = true). unfold white; subst; simpl; simplify.
-        pose proof parents_not_white. specialize (H7 s g o y0 v). apply H7 in H. rewrite H in H6. inversion H6.
-         subst; simpl. destruct (pop_stack st remain_f) eqn : ?.
-        -- simpl in H2. destruct (S.min_elt remain_d). inversion H2; subst. inversion H2.
-        -- simpl in H2. rewrite <- H2 in Heqs. eapply in_pop_rev. rewrite Heqs. solve_in.
-      * exists x0. exists x1. intros. destruct H3.
-        rewrite P2.FM.remove_neq_b in H4. apply H4. apply n.
-        destruct (pop_stack st) eqn : ?.
-        -- simpl in H2. destruct (S.min_elt remain_d); inversion H2.
-        -- simpl in H2. exists (add_to_stack x g0 remain_d ++ (pop_stack (x2) remain_f)).
-        split. destruct H3. rewrite H2. rewrite <- Heqs. rewrite H3. rewrite pop_stack_app_distr.
-        rewrite app_assoc. reflexivity. simplify. split. intros. intro. apply in_app_or in H5.
-        destruct H5. apply only_add_yet_to_be_discovered in H5. simplify.
-        rewrite P2.FM.remove_neq_b in H6. rewrite H6 in H5. inversion H5. intuition. 
-        destruct H3. destruct H6. apply (H6 o''). eapply in_pop_rev. apply H5.
-        intros. intro. destruct H3. destruct H6. apply (H7 y0). apply H5.
-    + destruct H4. destruct (O.eq_dec x v).
-      * unfold O.eq in e. subst. destruct H4. simplify. destruct H4.
-        exists x0. exists x1. intros. simplify. exfalso. eapply remove_eq. apply H9.
-      * exists x0. exists x1. intros. simplify.
-        rewrite P2.FM.remove_neq_b in H7. destruct H4. assumption.
-        destruct (pop_stack st remain_f) eqn : ?.
-        -- simpl in H3. destruct (S.min_elt remain_d) eqn : ?; inversion H3; subst.
-           remember (g0, f, M.add e (time + 1) f_times, d_times, time + 1, remain_d, S.remove e remain_f, nil) as s.
-           assert (exists o, In (v,o) (get_stack s)). eapply gray_on_stack. eapply step. apply H.
-           apply H0. unfold gray. subst; simpl; simplify. subst; simpl in *. destruct H5. destruct H5.
-        -- simpl in H3. rewrite <- H3 in Heqs.
-            destruct H4. rewrite H4 in Heqs. rewrite pop_stack_app_distr in Heqs.
-            destruct (pop_stack x2 remain_f) eqn : ?.
-            ++ inversion Heqs; subst. exfalso. apply n. reflexivity.
-            ++ inversion Heqs; subst. exists s0. split. reflexivity. split. intros.
-               destruct H5.
-               apply (H5 o''). eapply in_pop_rev. rewrite Heqs0. right. apply H4.
-                destruct H5. apply H5.
-            ++ apply H7.
-       -- intuition.
-Qed. 
-*)
 
 (** ** Lemmas for Parentheses Theorem **)
 
