@@ -23,15 +23,17 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
 
   Parameter is_child: forest -> vertex -> vertex -> bool.
 
+  Parameter is_root: forest -> vertex -> bool.
+
   (*Parameter get_children: forest -> vertex -> option (list vertex).*)
 
   Parameter forest_to_graph: forest -> G.graph.
   (*Input: forest, ancestor, descendant*)
-  Parameter is_descendant: forest -> vertex -> vertex -> bool.
+ (* Parameter is_descendant: forest -> vertex -> vertex -> bool.*)
 
   Definition is_parent f u v := is_child f v u.
 
-  Definition is_ancestor f u v := is_descendant f v u.
+ (* Definition is_ancestor f u v := is_descendant f v u.*)
 
   (*Parameter equal: tree -> tree -> bool.*)
 
@@ -64,8 +66,17 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
   Parameter add_child_6: forall t u v a,
     contains_vertex (add_child t u v) a = true -> contains_vertex t a = true \/ a = v.
 
+  Parameter add_child_7: forall f u v a b,
+    is_child f u v = false ->
+    a <> v \/ b <> u ->
+    is_child (add_child f a b) u v = false.
+
+  Parameter add_child_8: forall f u v r,
+    is_child f u v = false ->
+    is_child (add_root f r) u v = false.
+    
+
   Parameter add_root_1: forall f u,
-    contains_vertex f u = false ->
     contains_vertex (add_root f u) u = true.
 
   Parameter add_root_2: forall f u v,
@@ -74,6 +85,35 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
 
   Parameter add_root_3: forall f u v,
     contains_vertex (add_root f u) v = true -> u = v \/ contains_vertex f v = true.
+
+ 
+
+  (*Todo: see if I can prove 4 from this*)
+  Parameter add_root_5: forall f u v r,
+    is_child f u v = is_child (add_root f r) u v.
+
+  Parameter is_root_1: forall f r,
+    contains_vertex f r = false ->
+    is_root (add_root f r) r = true.
+
+  Parameter is_root_2: forall f r,
+    contains_vertex f r = true ->
+    is_root f r = false <-> (exists u, is_child f u r = true).
+    
+
+  Parameter is_root_3: forall f r u v,
+    is_root f r = true ->
+    is_root (add_child f u v) r = true.
+
+  Parameter is_root_4: forall f r u,
+    is_root f r = true ->
+    is_root (add_root f u) r = true.
+
+  Parameter is_child_1: forall f u v,
+    is_child f u v = true -> contains_vertex f u = true /\ contains_vertex f v = true /\ is_root f v = false.
+
+  Parameter is_child_2: forall f u u' v,
+    is_child f u v = true -> is_child f u' v = true -> u = u'.
 
 (*
   Parameter singleton_1: forall v,
@@ -117,7 +157,7 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
 
   Parameter tree_to_graph_3: forall t,
     P.acyclic (forest_to_graph t).
-
+(*
   Parameter is_descendant_edge: forall t u v,
     is_child t u v = true ->
     is_descendant t u v = true.
@@ -130,8 +170,58 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
   Parameter is_descendant_1: forall t u v a b,
     is_descendant t u v = true ->
     is_descendant (add_child t a b)  u v = true.
+*)
+  (*Parameter is_descendant_iff: forall t u v,
+    is_descendant t u v = true <-> is_child t u v = true \/ exists p, is_descendant t u p = true /\ is_child t p v = true.*)
+
+  Inductive desc: forest -> vertex -> vertex -> Prop :=
+  | parent: forall f u v, is_child f u v = true -> desc f u v
+  | d_step: forall f u v p,
+    desc f u p ->
+    is_child f p v = true ->
+    desc f u v.
+
+  Lemma is_descendant_edge: forall t u v,
+    is_child t u v = true ->
+    desc t u v.
+Proof.
+  intros. apply parent. apply H.
+Qed.
+
+Lemma is_descendant_trans: forall t u v w,
+    desc t u v ->
+    desc t v w ->
+    desc t u w.
+Proof.
+  intros. generalize dependent H. revert u. induction H0; intros.
+  - eapply d_step. apply H0. apply H.
+  - eapply d_step. apply IHdesc. apply H1. apply H.
+Qed. 
+
+Lemma is_descendant_1: forall t u v a b,
+    desc t u v  ->
+    desc (add_child t a b) u v.
+Proof.
+  intros. induction H.
+  - apply parent. apply add_child_2. apply H.
+  - eapply d_step. apply IHdesc. apply add_child_2. apply H0.
+Qed.
+
+ Lemma add_root_4: forall f u v r,
+    desc f u v <-> desc (add_root f r) u v.
+Proof.
+  intros. split; intros.
+  - induction H.
+  + apply parent. rewrite <- add_root_5. apply H.
+  + eapply d_step. apply IHdesc. rewrite <- add_root_5. apply H0.
+  - remember (add_root f r) as f'. induction H; subst.
+    + eapply parent. erewrite add_root_5. apply H.
+    + eapply d_step. apply IHdesc. reflexivity. erewrite add_root_5. apply H0.
+Qed. 
+
     
-(*might need equal lemma to ensure it is acyclic but we will see*)
+(*might need equal lemma to ensure it is acyclic but we 
+will see*)
 End Forest.
      
      
