@@ -1,4 +1,5 @@
 Require Export Graph.
+Require Import Helper.
 
 Require Export Path.
 (*TODO: maybe extend graph instead of providing function*)
@@ -55,9 +56,9 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
     contains_vertex t a = true ->
     contains_vertex (add_child t u v) a = true.
 
-  Parameter add_child_4: forall t u v,
+  Parameter add_child_4: forall t u u' v,
     contains_vertex t v = true ->
-    is_child (add_child t u v) u v = false.
+    is_child (add_child t u' v) u v = is_child t u v.
 
   Parameter add_child_5: forall t u v,
     contains_vertex t u = true ->
@@ -68,13 +69,23 @@ Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O S
 
   Parameter add_child_7: forall f u v a b,
     is_child f u v = false ->
-    a <> v \/ b <> u ->
+    a <> u \/ b <> v ->
     is_child (add_child f a b) u v = false.
 
   Parameter add_child_8: forall f u v r,
     is_child f u v = false ->
     is_child (add_root f r) u v = false.
     
+Lemma add_child_9: forall f u v a b,
+  is_child (add_child f u v) a b = true ->
+  is_child f a b = true \/ (u = a /\ b = v).
+Proof.
+  intros. destruct (is_child f a b) eqn : ?.
+  - left. reflexivity.
+  - destruct (O.eq_dec u a). destruct (O.eq_dec v b). unfold O.eq in *. subst.
+    right. split; reflexivity. all: right; eapply add_child_7 in Heqb0; try( rewrite Heqb0 in H; inversion H).
+    right. apply n. left. apply n.
+Qed. 
 
   Parameter add_root_1: forall f u,
     contains_vertex (add_root f u) u = true.
@@ -207,6 +218,73 @@ Proof.
   - eapply d_step. apply IHdesc. apply add_child_2. apply H0.
 Qed.
 
+Lemma desc_in_forest: forall f u v,
+  desc f u v ->
+  contains_vertex f u = true /\ contains_vertex f v = true.
+Proof.
+  intros. induction H; subst.
+  - apply is_child_1 in H. destruct H. destruct H0. split; assumption.
+  - apply is_child_1 in H0. repeat(match goal with | [H: _ /\ _ |- _ ] => destruct H end).
+    split; assumption.
+Qed. 
+
+Lemma desc_depends_on_children: forall f f',
+  (forall u v, is_child f u v = is_child f' u v) ->
+  (forall u v, desc f u v <-> desc f' u v).
+Proof.
+  intros. split; intro H1; induction H1.
+  - apply parent. rewrite <- H. apply H0.
+  - eapply d_step. apply IHdesc. apply H. rewrite <- H. apply H0.
+  - apply parent. rewrite H. apply H0.
+  - eapply d_step. apply IHdesc. apply H. rewrite H. apply H0.
+Qed.
+
+Lemma add_child_equiv: forall f v u',
+  contains_vertex f v = true ->
+  (forall a b, is_child f a b = true <-> is_child (add_child f u' v) a b = true).
+Proof.
+  intros. split; intros.
+  - apply add_child_2. apply H0.
+  - destruct (O.eq_dec v b).
+    + unfold O.eq in e. subst.  eapply add_child_4 in H. rewrite H0 in H. symmetry. apply H.
+    + apply add_child_9 in H0. destruct H0. apply H0. destruct H0; subst. exfalso. apply n.
+      reflexivity.
+Qed.
+
+Lemma is_descendant_contain: forall f u u' v' v,
+  contains_vertex f v = true ->
+  desc (add_child f u' v) u v' <->
+  desc f u v'.
+Proof.
+  intros. eapply desc_depends_on_children. intros. rewrite bool_prop. intros; split; intros.
+  eapply add_child_equiv. 
+  apply H. apply H0. apply add_child_2. apply H0.
+Qed. 
+
+Lemma is_descendant_2: forall f u v a b,
+  contains_vertex f u = true ->
+  desc (add_child f u v) a b ->
+  b = v \/ desc f a b.
+Proof.
+  intros.
+
+
+ remember (add_child f u v) as f'. induction H0; subst.
+  - apply add_child_9 in H0. destruct H0. right. apply parent. assumption. left. destruct H0; subst; split; reflexivity.
+  - 
+ destruct IHdesc. reflexivity. destruct H2; subst. destruct (O.eq_dec p v0). unfold O.eq in e.
+    subst. left. reflexivity.
+    assert (is_child f p v0 = true). destruct (contains_vertex f p) eqn : ?.
+    rewrite <- add_child_equiv in H1. apply H1. apply Heqb.
+    apply add_child_9 in H1. destruct H1. apply H1. destruct H1; subst. exfalso. apply n; reflexivity.
+    assert (contains_vertex f p = true). apply is_child_1 in H2. destruct H2; assumption.
+    rewrite is_descendant_contain in H0. right. eapply d_step. apply H0. apply H2. apply H3.
+    assert (A:= H1).
+    apply add_child_9 in H1. destruct H1. right. eapply d_step. apply H2. apply H1. destruct H1. subst.
+    left. reflexivity.
+Qed.
+
+
  Lemma add_root_4: forall f u v r,
     desc f u v <-> desc (add_root f r) u v.
 Proof.
@@ -218,6 +296,27 @@ Proof.
     + eapply parent. erewrite add_root_5. apply H.
     + eapply d_step. apply IHdesc. reflexivity. erewrite add_root_5. apply H0.
 Qed. 
+
+
+Lemma child_is_leaf: forall f u v,
+  contains_vertex f u = true ->
+  contains_vertex f v = false ->
+  (forall x, is_child (add_child f u v) v x = false).
+Proof.
+  intros. eapply add_child_7. destruct (is_child f v x) eqn : ?.
+  apply is_child_1 in Heqb. destruct Heqb. rewrite H1 in H0. inversion H0. reflexivity.
+  assert (u <> v). intro. subst. rewrite H0 in H. inversion H. left. apply H1.
+Qed.
+
+Lemma desc_is_leaf: forall f u v,
+  contains_vertex f u = true ->
+  contains_vertex f v = false ->
+  (forall x, ~desc (add_child f u v) v x).
+Proof.
+  intros. intro. remember (add_child f u v) as f'. induction H1; subst.
+  - rewrite child_is_leaf in H1. inversion H1. apply H. apply H0.
+  - apply IHdesc. apply H0. reflexivity.
+Qed.
 
     
 (*might need equal lemma to ensure it is acyclic but we 

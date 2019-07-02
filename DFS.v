@@ -2163,9 +2163,6 @@ Proof.
          apply H7. intuition. 
 Qed.
 
-
-
-
 Lemma finish_time_constant: forall s g o v n s',
   valid_dfs_state s g o ->
   M.find v (get_f_times s) = Some n ->
@@ -2220,6 +2217,8 @@ Proof.
   - pose proof (finish_time_constant s' g o v m s B H2 H3). rewrite H4 in H1. inversion H1; subst; reflexivity.
 Qed.
 
+(*Another key lemma for Parentheses Theorem: If a vertex p is gray when v is discovered, then it finishes
+  after*)
 Lemma gray_at_discovery_time_later_f_time: forall s g o v p s' n m,
   valid_dfs_state s g o ->
   Some (get_time s) = M.find v (get_d_times s) ->
@@ -2308,6 +2307,7 @@ Proof.
     + apply IHmulti. eapply step. apply H. apply H1. apply H0.
 Qed. 
 
+(*Every vertex is discovered before it is finished*)
 Lemma discover_before_finish: forall s g o v n m,
   valid_dfs_state s g o ->
   M.find v (get_d_times s) = Some n ->
@@ -2340,6 +2340,8 @@ Proof.
       * rewrite F.add_neq_o in H1. apply IHvalid_dfs_state. apply H0. apply H1. apply n0.
 Qed.
 
+(*The last lemma before Parentheses Theorem: if v starts after u and u finishes after v, then v finishes
+  before u*)
 Lemma times_ordering: forall s g o u v du dv fu fv,
   valid_dfs_state s g o ->
   u <> v ->
@@ -2371,21 +2373,7 @@ Proof.
   apply H12. apply H6. apply H4. apply H3.
 Qed.
 
-
-Lemma times_ordering_done: forall s g o u v du dv fu fv,
-  valid_dfs_state s g o ->
-  u <> v ->
-  done s = true ->
-  M.find u (get_d_times s) = Some du ->
-  M.find v (get_d_times s) = Some dv ->
-  M.find u (get_f_times s ) = Some fu ->
-  M.find v (get_f_times s) = Some fv ->
-  du < dv /\ dv < fu ->
-  dv < fv /\ fv < fu.
-Proof.
-  intros. eapply times_ordering; eassumption.
-Qed. 
-
+(*No vertex is discovered at the same time another one is finished*)
 Theorem all_times_unique: forall s g o u v n,
   valid_dfs_state s g o ->
   M.find v (get_d_times s) = Some n ->
@@ -2414,6 +2402,8 @@ Proof.
         eapply d_times_leq_current_time in H6. subst; simpl in *. omega. apply H. reflexivity.
       * rewrite F.add_neq_o in H1. apply IHvalid_dfs_state; assumption. apply n0.
 Qed.
+
+(** ** Parentheses Theorem **)
 
 Theorem parentheses_theorem: forall s g o u v du dv fu fv,
   valid_dfs_state s g o ->
@@ -2445,6 +2435,9 @@ Proof.
     + subst. assert (u = v). eapply d_times_unique. apply H. apply H2. apply H1. reflexivity. contradiction.
 Qed. 
 
+(** ** Lemmas for Corollary 22.8 of CLRS (u is a descendant of v iff du < dv < fv < fu) **)
+
+(*If a vertex u is gray when v is discovered, then v is a descendant of u in the DFS forest*)
 Lemma gray_at_discovery_time_implies_descedant: forall s g o u v,
   valid_dfs_state s g o ->
   u <> v ->
@@ -2509,6 +2502,7 @@ Proof.
         eapply d_times_leq_current_time in H7. subst; simpl in *. omega. apply H.
 Qed. 
 
+(*Descendants do not change as the algorithm steps*)
 Lemma descendant_constant: forall s g o u v,
   valid_dfs_state s g o ->
   F.desc (get_forest s) u v ->
@@ -2524,6 +2518,7 @@ Proof.
     + apply IHmulti. eapply step. apply H. apply H1. apply H0.
 Qed.
 
+(*Part 1 (<=) of the corollary: If du < dv < dv < fu, then v is a descendant of u*)
 Lemma time_interval_implies_descendant: forall s g o u v du dv fu fv,
   valid_dfs_state s g o ->
   u <> v ->
@@ -2556,7 +2551,8 @@ Proof.
   apply H9. apply H6.
 Qed. 
 
-(*Older proof, try to make shorter/use other theorems*)
+(*Older proof, try to make shorter/use other theorems. I'm sure there is a better proof that the parent
+  is gray at this point.*)
 Lemma destruct_app: forall (l1: stack) x l2 y  l3,
   l1 ++ x :: l2 = y :: l3 ->
   (l1 = nil /\ x = y /\ l2 = l3) \/ In y l1.
@@ -2568,6 +2564,7 @@ Proof.
     + inversion H; subst. contradiction.
 Qed.  
 
+(*If a vertex has a child on the stack, then it is gray*)
 Lemma parent_gray: forall s g o y,
   valid_dfs_state s g o ->
   (exists x, In (x, Some y) (get_stack s)) ->
@@ -2617,8 +2614,7 @@ Proof.
            rewrite Heqs. right. apply H0. apply IHvalid_dfs_state in H5. simplify.
 Qed.
 
-
-
+(*get rid of exists in hypothesis*)
 Lemma parent_on_stack_is_gray: forall s g o u v,
   valid_dfs_state s g o ->
   In (u, Some v) (get_stack s) ->
@@ -2668,6 +2664,8 @@ Proof.
         subst; simpl in *. omega. apply H2.
 Qed. 
 
+(*If a vertex is a root (has no parent) in the DFS forest at one point in the algorithm, then
+  it is a root in all future steps*)
 Lemma root_preserved: forall s g o v,
   valid_dfs_state s g o ->
   F.is_root (get_forest s) v = true ->
@@ -2683,6 +2681,7 @@ Proof.
     + apply IHmulti. apply H0.
 Qed. 
 
+(*Likewise, edges in the DFS forest are preserved*)
 Lemma child_preserved: forall s g o u v,
   valid_dfs_state s g o ->
   F.is_child (get_forest s) u v = true ->
@@ -2698,7 +2697,9 @@ Proof.
     + apply H0.
 Qed.
 
-
+(*Every vertex is either a root it has a parent in the forest at its discovery time
+  (TODO: might be able to prove in general that every vertex is either a root or has a parent
+  and then it will be trivial*)
 Lemma parent_or_root_at_discovery: forall s g o v,
   valid_dfs_state s g o ->
   M.find v (get_d_times s) = Some (get_time s) ->
@@ -2714,6 +2715,8 @@ Proof.
   + apply F.is_root_2 in Heqb. left. apply Heqb. apply H1.
 Qed.
 
+(*An edge in the DFS forest between (u,v) exists iff it exists at time du (so 
+  the only time we add an edge is when v is discovered)*)
 Lemma child_iff_at_discovery: forall s g o u v x,
   valid_dfs_state s g o ->
   valid_dfs_state x g o ->
@@ -2740,6 +2743,8 @@ Proof.
   - eapply child_preserved. apply H0. apply H4. apply H3.
 Qed.
 
+(*If v is a child of u in the DFS forest (not yet a descendant in general), then
+  du < dv < fv < fu*)
 Lemma parent_implies_time_interval: forall s g o u v du dv fu fv,
   valid_dfs_state s g o ->
   u <> v ->
@@ -2786,23 +2791,165 @@ Proof.
     eapply d_times_leq_current_time in C. omega. apply A. apply A. apply H12.
 Qed.
 
+(** ** Proof that DFS forest and original graph have same vertices **)
+
+(*Every vertex in the DFS forest was in the original graph*)
+Lemma vertices_in_forest_in_graph: forall s g o u,
+  valid_dfs_state s g o ->
+  F.contains_vertex (get_forest s) u = true ->
+  G.contains_vertex g u = true.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - pose proof F.empty_2. pose proof F.empty_1. rewrite H in H1. rewrite H1 in H0. inversion H0.
+  - inversion H1; subst; simpl in *. 
+    + apply F.add_root_3 in H0. destruct H0.
+      * subst. eapply remain_d_contains_valid_vertices. apply H. simpl. apply H2.
+      * apply IHvalid_dfs_state. apply H0.
+    + apply F.add_child_6 in H0. destruct H0.
+      * apply IHvalid_dfs_state. apply H0.
+      * subst. eapply remain_d_contains_valid_vertices. apply H. simpl. apply H2.
+    + apply IHvalid_dfs_state. apply H0.
+Qed.
+
+(*Every vertex in the original forest iff it is not white (has been discovered)*)
+Lemma in_forest_iff_not_white: forall s g o u,
+  valid_dfs_state s g o ->
+  G.contains_vertex g u = true ->
+  (white s u = false) <-> F.contains_vertex (get_forest s) u = true.
+Proof.
+  intros. split; intros. eapply gray_in_forest. apply H. apply H0. apply H1.
+  induction H; subst; simpl in *.
+  - pose proof F.empty_1. pose proof F.empty_2. rewrite H2 in H. rewrite H in H1. inversion H1.
+  - specialize (IHvalid_dfs_state H0). unfold white in *. inversion H2; subst; simpl in *.
+    + destruct (O.eq_dec x u).
+      * unfold O.eq in e. subst. rewrite remove_eq_false. reflexivity.
+      * apply F.add_root_3 in H1. destruct H1. subst. exfalso. apply n. reflexivity.
+        rewrite P2.FM.remove_neq_b. apply IHvalid_dfs_state. apply H1. apply n.
+    + destruct (O.eq_dec x u).
+      * unfold O.eq in e. subst. rewrite remove_eq_false. reflexivity.
+      * apply F.add_child_6 in H1. destruct H1. rewrite P2.FM.remove_neq_b. apply IHvalid_dfs_state.
+        apply H1. apply n. subst. exfalso. apply n. reflexivity.
+    + simplify. rewrite P2.Dec.F.remove_b. simplify.
+Qed.
+
+(*There are no white vertices when we finish*)
+Lemma no_white_vertices_at_end: forall s g o u,
+  valid_dfs_state s g o ->
+  done s = true ->
+  white s u = false.
+Proof.
+  intros. pose proof (all_finished_at_end s g o u H). destruct (G.contains_vertex g u) eqn : ?.
+  - assert (exists n : nat, M.find u (get_f_times s) = Some n) by (apply H1; [reflexivity|assumption]).
+    rewrite <- v_finished_iff_not_remain in H2. unfold white. rewrite H2. apply andb_false_r.
+    apply H. apply Heqb.
+  - destruct (white s u) eqn : ?. unfold white in Heqb0. simplify.
+    assert (G.contains_vertex g u = true). eapply remain_d_contains_valid_vertices. apply H.
+    apply H2. rewrite H4 in Heqb. inversion Heqb. reflexivity.
+Qed. 
+
+(*The DFS forest has the same vertices as the original graph*)
+Lemma same_vertices: forall s g o u,
+  valid_dfs_state s g o ->
+  done s = true ->
+  (G.contains_vertex g u = true <-> F.contains_vertex (get_forest s) u = true).
+Proof.
+  intros. eapply no_white_vertices_at_end in H0. split; intros.
+  rewrite <- in_forest_iff_not_white. apply H0. apply H. apply H1. 
+  eapply vertices_in_forest_in_graph. apply H. apply H1. apply H.
+Qed.
+
+(*If v is a descendant of v, then u <> v. Note that this is equivalent to proving that the
+  DFS forest is acyclic, once I defined that formally. It is also very likely that
+  this follows immediately from acyclicty, so I may change it TODO: come back*)
+Lemma desc_in_forest_neq: forall s g o u v,
+  valid_dfs_state s g o ->
+  F.desc (get_forest s) u v ->
+  u <> v.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - pose proof F.empty_1. pose proof F.empty_2. inversion H0; subst. 
+    apply F.is_child_1 in H2. destruct_all. rewrite H1 in H. rewrite H in H2. inversion H2.
+    apply F.is_child_1 in H3. destruct_all. rewrite H1 in H. rewrite H in H3. inversion H3.
+  - inversion H1; subst; simpl in *. 
+    + rewrite <- F.add_root_4 in H0. apply IHvalid_dfs_state. apply H0.
+    + assert (F.contains_vertex f y = true). { 
+      remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s.
+      replace f with (get_forest s) by (subst; reflexivity).
+      destruct (pop_stack st remain_f) eqn : ?; simpl in H3.
+      destruct (S.min_elt remain_d); inversion H3. rewrite <- H3 in Heqs0; clear H3. eapply gray_in_forest.
+      apply H. eapply parents_valid. apply H. subst; simpl. eapply in_pop_rev. rewrite Heqs0.
+      left. reflexivity. eapply parents_not_white. apply H. subst; simpl. eapply in_pop_rev.
+      rewrite Heqs0. left. reflexivity. } assert (F.contains_vertex f x = false). {
+      remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s.
+      replace f with (get_forest s) by (subst; reflexivity).
+      eapply white_not_in_forest. apply H. unfold white. replace remain_d with (get_remain_d s) in H2
+      by (subst; reflexivity). rewrite H2. eapply not_f_if_not_d in H2. apply H2. apply H. }
+      destruct (O.eq_dec u x). 
+      * unfold O.eq in e. subst. eapply F.desc_is_leaf in H4. exfalso. apply H4.
+        apply H0. apply H5.
+      * apply F.is_descendant_2 in H0. destruct H0. subst. apply n. apply IHvalid_dfs_state.
+        apply H0. apply H4.
+    + apply IHvalid_dfs_state. apply H0.
+Qed.
+
+(*Every vertex has a discovery and finish time when the algorithm terminates*)
+Lemma all_times_when_done: forall s g o u,
+  valid_dfs_state s g o ->
+  done s = true ->
+  G.contains_vertex g u = true ->
+  (exists n, M.find u (get_d_times s) = Some n) /\
+  (exists n, M.find u (get_f_times s) = Some n).
+Proof.
+  intros. assert (black s u = true). unfold black. unfold done in *. simplify. 
+  destruct (S.mem u (get_remain_d s)) eqn : ?. solve_empty. reflexivity.
+  simplify. destruct (S.mem u (get_remain_f s)) eqn : ?. solve_empty. reflexivity.
+  unfold black in H2. simplify. simplify. rewrite <- v_discovered_iff_not_remain.
+  apply H3. apply H. apply H1. rewrite <- v_finished_iff_not_remain. simplify.
+  apply H. apply H1.
+Qed.
+
+(*The other side of the corollary: If v is a descendant of u in the DFS forest,
+  du < dv < fv < fv*)
 Lemma desc_implies_time_interval: forall s g o u v du dv fu fv,
   valid_dfs_state s g o ->
   u <> v ->
+  done s = true ->
   F.desc (get_forest s) u v ->
   M.find u (get_d_times s) = Some du ->
   M.find u (get_f_times s) = Some fu ->
   M.find v (get_d_times s) = Some dv ->
   M.find v (get_f_times s) = Some fv ->
-  (du < dv) /\ (dv < fv) /\ (fv < fu).
+  (du < dv) /\ (dv < fv) /\ (fv < fu). 
 Proof.
   intros. generalize dependent du. generalize dependent fu. generalize dependent dv. generalize dependent fv.
-  remember (get_forest s) as f. induction H1; subst; intros; subst.
+  remember (get_forest s) as f. induction H2; subst; intros; subst.
   - eapply parent_implies_time_interval; try(eassumption).
-  - (*strategy (easy): prove p not u (add clause in forest or else add acylic and derive)
-      then need to show that p in graph (might as well add lemma - in forest => in graph)
-      then change hypothesis to done so every vertex is finished and discovered
-      then use this and the previous lemma to prove the inequality*) 
+  - assert (u <> p). eapply desc_in_forest_neq. apply H. apply H2. 
+    specialize (IHdesc H8).
+    assert (white s p = false). eapply no_white_vertices_at_end. apply H. apply H1.
+    assert (G.contains_vertex g p = true). rewrite same_vertices. apply F.is_child_1 in H3.
+    destruct H3. apply H3. apply H. apply H1. pose proof (all_times_when_done _ _ _ _ H H1 H10).
+    destruct_all. edestruct IHdesc. reflexivity. apply H12. apply H11. apply H4. apply H7.
+    assert (p <> v). eapply desc_in_forest_neq. apply H. apply F.parent. apply H3. 
+    pose proof (parent_implies_time_interval _ _ _ _ _ _ _ _ _ H H15 H3 H11 H12 H5 H6). omega.
+Qed.
+
+(*The second major theorem of DFS: Corollary 22.8 in CLRS: v is a descendant of u in the DFS forest
+  iff du < dv < fv < fu*)
+Theorem desc_iff_time_interval: forall s g o u v du dv fu fv,
+  valid_dfs_state s g o ->
+  u <> v ->
+  done s = true ->
+  M.find u (get_d_times s) = Some du ->
+  M.find u (get_f_times s) = Some fu ->
+  M.find v (get_d_times s) = Some dv ->
+  M.find v (get_f_times s) = Some fv ->
+  F.desc (get_forest s) u v <->(du < dv) /\ (dv < fv) /\ (fv < fu). 
+Proof.
+  intros. split; intros.
+  - eapply desc_implies_time_interval; eassumption.
+  - eapply time_interval_implies_descendant; eassumption.
+Qed. 
 
 
 
