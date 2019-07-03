@@ -1,0 +1,10 @@
+*.vo
+*.glob
+*.crashcoqide
+*.gz
+*.pdf
+*.conf
+*.aux
+*#
+*.d
+*.log
