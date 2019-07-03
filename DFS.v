@@ -22,6 +22,7 @@ Module P := FMapFacts.WProperties_fun O M.
 Module F := P.F.
 Module P2 := FSetProperties.WProperties_fun O S.
 Module O2 := OrderedTypeFacts O.
+Module Pa := (Path.PathTheories O S G).
 
 (*First, we define the types we will need*)
 Definition vertex := O.t.
@@ -2938,7 +2939,6 @@ Qed.
   iff du < dv < fv < fu*)
 Theorem desc_iff_time_interval: forall s g o u v du dv fu fv,
   valid_dfs_state s g o ->
-  u <> v ->
   done s = true ->
   M.find u (get_d_times s) = Some du ->
   M.find u (get_f_times s) = Some fu ->
@@ -2947,9 +2947,337 @@ Theorem desc_iff_time_interval: forall s g o u v du dv fu fv,
   F.desc (get_forest s) u v <->(du < dv) /\ (dv < fv) /\ (fv < fu). 
 Proof.
   intros. split; intros.
-  - eapply desc_implies_time_interval; eassumption.
-  - eapply time_interval_implies_descendant; eassumption.
+  - eapply desc_implies_time_interval; try(eassumption). eapply desc_in_forest_neq in H5. apply H5. apply H.
+  - eapply time_interval_implies_descendant; try(eassumption). intro. subst. rewrite H2 in H4. inversion H4; omega.
+Qed.
+
+(** ** Lemmas for White Path Theorem **)
+Lemma add_to_stack_neighbors: forall v g r u p,
+  In (u, Some p) (add_to_stack v g r) ->
+  G.contains_edge g p u = true.
+Proof.
+  intros. assert (p = v). eapply add_to_stack_adds_parent in H. inversion H; subst. reflexivity.
+  subst. unfold add_to_stack in H.
+  assert (forall s x y, In (x, y) (fold_right
+            (fun (v0 : S.elt) (t : list (S.elt * option O.t)) =>
+             if S.mem v0 (S.remove v r) then (v0, Some v) :: t else t) nil s) -> In x s).
+  { intros. induction s. simpl in H0. destruct H0. simpl in H0.
+    destruct (S.mem a (S.remove v r)) eqn : ?.
+    simpl in H0. destruct H0. inversion H0; subst. left. reflexivity.
+    right. apply IHs. apply H0. right. apply IHs. apply H0. }
+    destruct (G.neighbors_set g v) eqn : ?.
+    - assert (In u (S.elements t)). eapply H0. apply H. clear H. clear H0.
+      rewrite In_InA_equiv in H1. apply S.elements_2 in H1.
+      rewrite G.neighbors_set_2. apply H1. apply Heqo.
+    - inversion H.
+Qed.
+
+Definition get_graph (s: state) :=
+  match s with
+  | (g, _, _, _, _, _, _, _) => g
+  end.
+
+Lemma graph_constant: forall s g o,
+  valid_dfs_state s g o ->
+  get_graph s = g.
+Proof.
+  intros. induction H.
+  - simpl. reflexivity.
+  - inversion H0; subst; simpl in *; reflexivity.
+Qed.
+
+Lemma stack_elts_neighbors: forall s g o u v,
+  valid_dfs_state s g o ->
+  In (u, Some v) (get_stack s) ->
+  G.contains_edge g v u = true.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - destruct o. destruct (G.contains_vertex g v0). inversion H0. inversion H. inversion H. inversion H0.
+    inversion H0.
+  - inversion H1; assert (A: g0 = g) by ((replace g0 with (get_graph s1) by (subst; reflexivity)); apply (graph_constant _ _ _ H));
+    subst; simpl in *.
+    + assert (tl = nil). eapply root_nil. eapply step. apply H. apply H1. reflexivity. subst.
+      apply in_app_or in H0. destruct H0. eapply add_to_stack_neighbors.  apply H0. destruct H0; inversion H0.
+    + destruct (pop_stack st remain_f) eqn : ?; simpl in H3.
+      * destruct (S.min_elt remain_d); inversion H3.
+      * rewrite <- H3 in Heqs. clear H3. apply in_app_or in H0. destruct H0. eapply add_to_stack_neighbors.
+        apply H0. apply IHvalid_dfs_state. eapply in_pop_rev. rewrite Heqs. apply H0.
+    + destruct ((pop_stack st remain_f)) eqn : ?; simpl in H4.
+      * destruct (S.min_elt remain_d); inversion H4; subst. inversion H0.
+      * rewrite <- H4 in Heqs. clear H4. apply IHvalid_dfs_state. eapply in_pop_rev. rewrite Heqs. solve_in.
+Qed.  
+
+Lemma edges_in_forest_in_graph: forall s g o u v,
+  valid_dfs_state s g o ->
+  F.is_child (get_forest s) u v = true ->
+  G.contains_edge g u v = true.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - pose proof F.empty_1. pose proof F.empty_2. rewrite H1 in H. apply F.is_child_1 in H0. destruct_all.
+     rewrite H in H0. inversion H0.
+  - inversion H1; subst; simpl in *.
+    + rewrite <- F.add_root_5 in H0. apply IHvalid_dfs_state. apply H0.
+    + apply F.add_child_9 in H0. destruct H0. apply IHvalid_dfs_state. apply H0.
+      destruct_all; subst. destruct (pop_stack st remain_f) eqn : ?; simpl in H3.
+      destruct (S.min_elt remain_d); inversion H3. rewrite <- H3 in Heqs; clear H3.
+      eapply stack_elts_neighbors. apply H. simpl. eapply in_pop_rev. rewrite Heqs. left. reflexivity.
+    + apply IHvalid_dfs_state. apply H0.
+Qed.
+
+Lemma desc_implies_path: forall s g o u v l,
+  valid_dfs_state s g o ->
+  F.desc_list (get_forest s) u v l = true ->
+  Pa.path_list g u v l = true.
+Proof.
+  intros. generalize dependent u. induction l; intros.
+  - simpl in *. eapply edges_in_forest_in_graph. apply H. apply H0.
+  - simpl in *. simplify. eapply edges_in_forest_in_graph. apply H. apply H1.
 Qed. 
+
+Lemma descendants_white_at_time_du: forall s g o u v x,
+  valid_dfs_state s g o ->
+  done s = true ->
+  F.desc (get_forest s) u v ->
+  valid_dfs_state x g o ->
+  M.find u (get_d_times s) = Some (get_time x) ->
+  white x v = true.
+Proof.
+  intros. pose proof (F.desc_in_forest _ _ _ H1). destruct_all.  rewrite <- (same_vertices _ _ _ _ H H0) in H5.
+  rewrite <- (same_vertices _ _ _ _ H H0) in H4. pose proof (all_times_when_done s g o u H H0 H4).
+  destruct_all. pose proof (all_times_when_done s g o v H H0 H5). destruct_all.
+  assert (dfs_multi x s). assert (A:= H). assert (B:= H2). apply valid_begins_with_start in H.
+  apply valid_begins_with_start in H2. pose proof (multi_from_start _ _ _ H H2). destruct H10.
+  apply H10. inversion H10. subst.
+  rewrite H3 in H6. inversion H6; subst. assert (C:=H7). eapply f_times_leq_current_time in H7.
+  pose proof (discover_before_finish _ _ _ _ _ _ A H3 C). omega. apply A. subst.
+  eapply done_cannot_step in H0. exfalso. apply H0. exists y. apply H11. apply A.
+  rewrite H3 in H6. inversion H6; subst. pose proof (desc_iff_time_interval
+  s g o u v (get_time x) x3 x0 x2 H H0 H3 H7 H8 H9). destruct H11. apply H11 in H1.
+  destruct (white x v) eqn : ?. reflexivity. unfold white in *.
+  assert (S.mem v(get_remain_d x) = false). simplify. pose proof (not_f_if_not_d
+  x g o v H2). apply contrapositive in H17. destruct (S.mem v (get_remain_d x)).
+  contradiction. reflexivity. rewrite H14. intro. inversion H19.
+  rewrite v_discovered_iff_not_remain in H13. destruct_all. 
+  assert (A:= H13). eapply d_times_leq_current_time in H13.
+  eapply discovery_time_constant in A. rewrite A in H8. inversion H8; subst. omega.
+  apply H2. apply H10. apply H2. apply H2. apply H5.
+Qed.
+
+(*The first half of the white path theorem: If v is a descendant of u when DFS finishes, then at time du,
+  there is a path in the original graph from u to v such that all vertices (except for u) are white*)
+Lemma desc_implies_white_path: forall s g o u v x,
+  valid_dfs_state s g o ->
+  done s = true ->
+  F.desc (get_forest s) u v ->
+  valid_dfs_state x g o ->
+  M.find u (get_d_times s) = Some (get_time x) ->
+  (exists l, Pa.path_list g u v l = true /\ (forall y, In y l -> white x y = true) /\ white x v = true).
+Proof.
+  intros. assert (A:=H1). rewrite <- F.desc_list_iff_desc in H1. destruct_all. exists x0.
+  split. eapply desc_implies_path. apply H. apply H1. split. intros.
+  eapply F.desc_list_all_desc in H1. eapply descendants_white_at_time_du. apply H.
+  apply H0. apply H1. apply H2. apply H3. apply H4. eapply descendants_white_at_time_du.
+  apply H. apply H0. apply A. apply H2. apply H3.
+Qed. 
+
+(* We want to prove that if the edge (p, u) is in the graph and if u is white at time dp, then u is a 
+  descendant of p. We will do this in the following steps:
+1. Prove that if (u, Some p) is on the stack, then it is on the stack when u is discovered
+2. Therefore, p is gray when u is discovered
+3. Therefore, u is a descendant of p
+DONE UP TO HERE
+4. Thus, at time dp, (p, u) will be included in the add_to_stack portion (because u is white), 
+  so (u, Some p) is on the stack,
+  so u is a descendant of p *)
+
+(*Alternative DFS multi that takes the step last. This helps ensure that the discovery time in the next
+  proof does not change when we do induction*)
+Inductive dfs_multi': state -> state -> Prop :=
+  | multi_refl' : forall s, dfs_multi' s s
+  | multi_step': forall s1 s2 s3,
+    dfs_multi' s1 s2 ->
+    dfs_step s2 s3 ->
+    dfs_multi' s1 s3.
+
+Lemma dfs_multi'_trans: forall s1 s2 s3,
+  dfs_multi' s1 s2 ->
+  dfs_multi' s2 s3 ->
+  dfs_multi' s1 s3.
+Proof.
+  intros. induction H0.
+  - apply H.
+  - eapply multi_step'. apply IHdfs_multi'. apply H. apply H1.
+Qed.
+
+Lemma dfs_multi'_R: forall s1 s2,
+  dfs_step s1 s2 ->
+  dfs_multi' s1 s2.
+Proof.
+  intros. eapply multi_step'. apply multi_refl'. apply H.
+Qed.
+
+Lemma dfs_multi_equiv: forall s s',
+  dfs_multi s s' <-> dfs_multi' s s'.
+Proof.
+  intros. split; intro H; induction H.
+  - constructor.
+  - eapply dfs_multi'_trans. apply dfs_multi'_R. apply H. apply IHmulti.
+  - constructor.
+  - eapply multi_trans. apply IHdfs_multi'. apply multi_R. apply H0.
+Qed. 
+
+Lemma list_app_neq: forall (A: Type) (l l1: list A),
+  l1 <> nil ->
+  l <> l1 ++ l.
+Proof.
+  intros. generalize dependent l1. induction l; intros; simpl in *.
+  - destruct l1. contradiction. intro. inversion H0.
+  - intro. destruct l1. contradiction. inversion H0; subst. eapply IHl. 
+    assert (l1 ++ (a0:: nil) <> nil). intro. destruct l1; inversion H1. apply H1.
+    rewrite H3 at 1. rewrite <- app_assoc. reflexivity.
+Qed.
+
+(*part 1: If (u, Some p) is on the stack, then it is on the stack at time du*)
+Lemma on_stack_discover: forall s g o u p x,
+  valid_dfs_state s g o ->
+  In (u, Some p) (get_stack s) ->
+  valid_dfs_state x g o ->
+  M.find u (get_d_times x) = Some (get_time x) ->
+  In (u, Some p) (get_stack x).
+Proof.
+  intros. assert (A:= H). assert (B:=H1). apply valid_begins_with_start in A. apply valid_begins_with_start in B.
+  pose proof (multi_from_start _ _ _ A B). destruct H3. clear A. clear B. rewrite dfs_multi_equiv in H3.
+  assert (M: M.find u (get_d_times s) = Some (get_time x)). eapply discovery_time_constant. apply H1. apply H2.
+  rewrite dfs_multi_equiv. apply H3.
+  induction H3.
+  - apply H0.
+  - assert (valid_dfs_state s2 g o). eapply multistep_preserves_valid. apply H1. rewrite dfs_multi_equiv.
+    apply H3. specialize (IHdfs_multi' H5). inversion H4; subst; simpl in *.
+    + assert (tl = nil). eapply root_nil. eapply step. apply H5. apply H4. reflexivity. subst.
+      apply in_app_or in H0. destruct H0.
+      * assert (A:=H0). apply add_to_stack_neq in H0. rewrite F.add_neq_o in M.
+        apply only_add_yet_to_be_discovered in A. remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s.
+        assert (S.mem u (get_remain_d s) = false). rewrite v_discovered_iff_not_remain. exists (get_time s1).
+        subst; simpl; apply M. apply H5. eapply discovered_vertices_in_graph. apply H5. subst; simpl; apply M.
+        subst; simpl in *. rewrite H8 in A. inversion A. auto.
+      * destruct H0; inversion H0.
+    + destruct (O.eq_dec u x).
+      * unfold O.eq in e. subst. rewrite F.add_eq_o in M. inversion M; subst.
+        rewrite <- dfs_multi_equiv in H3. apply time_incr_multi in H3. simpl in *. destruct H3.
+        subst; simpl in *. omega. omega. reflexivity.
+      * rewrite F.add_neq_o in M. destruct (pop_stack st remain_f) eqn : ?; simpl in H7.
+        destruct (S.min_elt remain_d); inversion H7. rewrite <- H7 in Heqs; clear H7.
+        remember (g0, f, f_times, d_times, time, remain_d, remain_f, st)  as s'.
+        assert (S.mem u (get_remain_d s') = false). rewrite v_discovered_iff_not_remain.
+        exists (get_time s1). subst; simpl; assumption. apply H5. 
+        eapply discovered_vertices_in_graph. apply H5. subst; simpl; apply M.
+        subst; simpl in *. apply in_app_or in H0. destruct H0.
+        apply only_add_yet_to_be_discovered in H0. rewrite H0 in H7. inversion H7.
+        apply IHdfs_multi'. eapply in_pop_rev. rewrite Heqs. apply H0. apply H1. apply H2. auto. auto.
+    + destruct (pop_stack st remain_f) eqn : ?; simpl in H8. destruct (S.min_elt remain_d); inversion H8; subst.
+      inversion H0. rewrite <- H8 in Heqs; clear H8. apply IHdfs_multi'. eapply in_pop_rev. rewrite Heqs. right. apply H0.
+      apply H1. apply H2. auto.
+  - clear A. clear B. induction H3; subst; simpl in *.
+    + apply H0.
+    + assert (S.mem u (get_remain_d x) = true). destruct (S.mem u (get_remain_d x)) eqn : ?. reflexivity.
+       rewrite v_discovered_iff_not_remain in Heqb. destruct_all. assert (A:=H5). eapply d_times_leq_current_time in H5.
+      eapply discovery_time_constant in A. rewrite A in H2. inversion H2; subst.
+      apply time_incr_step in H3. apply time_incr_multi in H4. destruct H4. subst. omega. omega.
+      apply H. eapply multi_step. apply H3. apply H4. apply H. apply H. 
+      eapply stack_valid. apply H. apply H0.
+      assert (S.mem u (get_remain_f x) = true) by (eapply not_f_if_not_d; eassumption).
+      assert (valid_dfs_state y g o). eapply step. apply H. apply H3.
+      specialize (IHmulti H7). inversion H3; subst; simpl in *.
+      * assert (tl = nil). eapply root_nil. eapply step. apply H. apply H3. reflexivity. subst.
+        destruct (pop_stack st remain_f) eqn : ?; simpl in H9. destruct (S.min_elt remain_d) eqn : ?.
+        inversion H9; subst. rewrite pop_stack_nil in Heqs. specialize (Heqs (u, Some p)). simpl in Heqs.
+        rewrite Heqs in H6. inversion H6. apply H0. inversion H9. 
+        rewrite <- H9 in Heqs. 
+        pose proof (pop_stack_app st remain_f). destruct_all; subst. apply in_app_or in H0. destruct H0.
+        rewrite H11 in Heqs. subst. rewrite pop_stack_app_distr in H11. assert (pop_stack x remain_f = nil).
+        destruct (pop_stack x remain_f) eqn : ?. reflexivity. inversion H11. destruct s0; inversion H13.
+        rewrite pop_stack_nil in H10. specialize (H10 (u, Some p)). simpl in H10. rewrite H10 in H6.
+        inversion H6. apply H0. remember (g0, f, f_times, d_times, time, remain_d, remain_f, x ++ (x0, None) :: nil) as s'.
+        replace remain_f with (get_remain_f s') by (subst; reflexivity).
+        eapply not_f_if_not_d. subst. apply H. subst; simpl; assumption. rewrite H11 in Heqs. subst.
+        destruct H0; inversion H0.
+      * destruct ((pop_stack st remain_f)) eqn : ?; simpl in H9.
+        -- destruct (S.min_elt remain_d) eqn : ?; inversion H9.
+        -- rewrite <- H9 in Heqs. pose proof (pop_stack_app st remain_f). destruct_all; subst.
+           rewrite H11 in Heqs; subst. rewrite pop_stack_app_distr in H11.
+           assert (pop_stack x remain_f = nil). destruct (pop_stack x remain_f) eqn : ?. reflexivity.
+           pose proof (list_app_neq _ ((x0, Some y0) :: tl)(p1 :: s0)). rewrite <- H11 in H10 at 1.
+          assert ( (p1 :: s0) ++ (x0, Some y0) :: tl <> (p1 :: s0) ++ (x0, Some y0) :: tl).
+          apply H10. intro. inversion H12. contradiction. rewrite pop_stack_nil in H10.
+          specialize (H10 (u, Some p)). simpl in H10. apply in_app_or in H0. destruct H0.
+          rewrite H10 in H6. inversion H6. apply H0. apply IHmulti. solve_in. apply H1. apply H2.
+          remember (g0, f, f_times, d_times, time, remain_d, remain_f, x ++ (x0, Some y0) :: tl) as s'.
+          replace remain_f with (get_remain_f s') by (subst; reflexivity). eapply not_f_if_not_d. subst.
+          apply H. subst; simpl; assumption.
+      * destruct ((pop_stack st remain_f)) eqn : ?; simpl in H10.
+        -- rewrite pop_stack_nil in Heqs. specialize (Heqs (u, Some p)). rewrite Heqs in H6. inversion H6.
+            apply H0.
+        -- rewrite <- H10 in Heqs. clear H10. pose proof (pop_stack_app st remain_f). destruct_all; subst.
+           rewrite H11 in Heqs; subst. rewrite pop_stack_app_distr in H11.
+           assert (pop_stack x remain_f = nil). destruct (pop_stack x remain_f) eqn : ?. reflexivity.
+           pose proof (list_app_neq _ ((x0, o0) :: tl)(p1 :: s0)). rewrite <- H11 in H10 at 1.
+          assert ( (p1 :: s0) ++ (x0, o0) :: tl <> (p1 :: s0) ++ (x0, o0) :: tl).
+          apply H10. intro. inversion H12. contradiction. rewrite pop_stack_nil in H10.
+          specialize (H10 (u, Some p)). simpl in H10. apply in_app_or in H0. destruct H0.
+          rewrite H10 in H6. inversion H6. apply H0. simpl in H0. destruct H0. inversion H0; subst.
+          rewrite H8 in H5. inversion H5. apply IHmulti. solve_in. apply H1. apply H2. apply H9.
+Qed.
+ 
+(*Part 2: if (u, Some p) is on the stack, then p is gray when u is discovered*)
+Lemma on_stack_parent_gray_when_discovered: forall s g o u p x,
+  valid_dfs_state s g o ->
+  In (u, Some p) (get_stack s) ->
+  valid_dfs_state x g o ->
+  M.find u (get_d_times x) = Some (get_time x) ->
+  gray x p = true.
+Proof.
+  intros. eapply parent_on_stack_is_gray. apply H1. eapply on_stack_discover. apply H. apply H0. apply H1.
+  apply H2.
+Qed.
+
+(*Part 3: If (u, Some p) is on the stack at any point, then u is a descendant of p when we are done*)
+Lemma on_stack_descendant: forall s s' g o u p,
+  valid_dfs_state s g o ->
+  done s = true ->
+  valid_dfs_state s' g o ->
+  In (u, Some p) (get_stack s') ->
+  F.desc (get_forest s) p u.
+Proof.
+  intros. assert (G.contains_vertex g u = true). eapply stack_valid. apply H1. apply H2.
+  pose proof (all_times_when_done s g o u H H0 H3). destruct_all.
+  pose proof (discovery_time_means_discovered s g o u x0 H H4). destruct_all; subst.
+  assert (gray x1 p = true). eapply on_stack_parent_gray_when_discovered. apply H1.
+  apply H2. apply H8. apply H9. assert (G.contains_vertex g p = true). eapply parents_valid.
+  apply H1. apply H2.
+  pose proof (all_times_when_done s g o p H H0 H10). destruct_all.
+  assert (A:=H7). unfold gray in H7. simplify. 
+  rewrite v_discovered_iff_not_remain in H13. destruct_all. 
+  assert (x3 = x2). eapply discovery_time_constant in H7. rewrite H7 in H11. inversion H11; subst.
+  reflexivity. apply H8. apply H6. subst. 
+  assert (x2 < (get_time x1)). eapply d_times_leq_current_time in H7. 
+  assert (x2 = get_time x1 \/ x2 < get_time x1) by omega. destruct H13. subst.
+  pose proof (d_times_unique _ _ _ _ _ _ _ H H4 H11). assert (p = u). apply H13. reflexivity.
+  subst. exfalso. eapply neq_parent. apply H1. apply H2. reflexivity. apply H13. apply H8.
+  pose proof (finish_time_means_finished s g o p x0 H H12). destruct_all.
+  assert (dfs_multi x1 x3). { assert (B:= H8). assert (C:= H17). apply valid_begins_with_start in H8.
+  apply valid_begins_with_start in H17. pose proof (multi_from_start _ _ _ H8 H17). destruct H19.
+  unfold gray in *. simplify. assert (M.find p (get_f_times x1) = None). pose proof (v_finished_iff_not_remain
+  _ _ _ _ B H10). destruct H22. apply contrapositive in H23. destruct (M.find p (get_f_times x1) ) eqn : ?.
+  exfalso. apply H23. exists n. reflexivity. reflexivity. rewrite H21. intro. inversion H24.
+  eapply finish_time_constant in H18. rewrite H18 in H22. inversion H22. apply C. apply H19. apply H19. }
+  assert (B:= H19). apply time_incr_multi in H19. destruct H19. subst.
+  exfalso. eapply all_times_unique. apply H. apply H4. apply H12. 
+  assert (p <> u). intro. subst. eapply neq_parent. apply H1. apply H2. reflexivity.
+  subst. pose proof (times_ordering _ _ _ _ _ _ _ _ _ H H20 H11 H4 H12 H5). 
+  assert (get_time x1 < x /\ x < get_time x3). apply H16. omega.
+  eapply time_interval_implies_descendant. apply H. apply H20. apply H11. apply H12. apply H4. apply H5.
+  omega. apply H8. apply H10.
+Qed.
 
 
 

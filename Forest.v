@@ -2,6 +2,7 @@ Require Export Graph.
 Require Import Helper.
 
 Require Export Path.
+Require Import Coq.Lists.List.
 (*TODO: maybe extend graph instead of providing function*)
 
 Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O Sg).
@@ -318,6 +319,77 @@ Proof.
   - apply IHdesc. apply H0. reflexivity.
 Qed.
 
+Lemma path_iff_desc: forall f u v,
+  P.path (forest_to_graph f) u v <-> desc f u v.
+Proof.
+  intros. split; intro H. remember (forest_to_graph f) as g. induction H; subst.
+  - rewrite <- tree_to_graph_2 in H. apply parent. apply H.
+  - rewrite <- tree_to_graph_2 in H0. eapply d_step. apply IHpath. reflexivity. apply H0.
+  - induction H.
+    + apply P.p_start. rewrite <- tree_to_graph_2. apply H.
+    + eapply P.p_continue. apply IHdesc. rewrite <- tree_to_graph_2. apply H0.
+Qed.
+
+Import ListNotations.
+
+Fixpoint desc_list (f: forest) (u v: vertex) (l : list vertex) : bool :=
+  match l with
+  | nil => is_child f u v
+  | x :: tl => is_child f u x && desc_list f x v tl
+  end.
+
+(*Easier to prove for lists*)
+  Inductive desc': forest -> vertex -> vertex -> Prop :=
+  | parent': forall f u v, is_child f u v = true -> desc' f u v
+  | d_step': forall f u v p,
+    is_child f u p = true ->
+    desc' f p v ->
+    desc' f u v.
+
+Lemma desc'_trans: forall f u v w,
+  desc' f u v ->
+  desc' f v w ->
+  desc' f u w.
+Proof.
+  intros. induction H.
+  - eapply d_step'. apply H. apply H0.
+  - eapply d_step'. apply H. apply IHdesc'. apply H0.
+Qed.
+
+Lemma desc_desc': forall f u v,
+  desc f u v <-> desc' f u v.
+Proof.
+  intros. split; intros; induction H.
+  - apply parent'. apply H.
+  - eapply desc'_trans. apply IHdesc. apply parent'. apply H0.
+  - apply parent. apply H.
+  - eapply is_descendant_trans. apply parent. apply H. apply IHdesc'.
+Qed.
+
+  Lemma desc_list_iff_desc: forall f u v,
+    (exists l, desc_list f u v l = true) <->
+    desc f u v.
+  Proof.
+    intros. split; intros. destruct H. generalize dependent u. induction x; intros.
+    - simpl in H. apply parent. apply H.
+    - simpl in H. rewrite andb_true_iff in H. destruct H.
+      eapply is_descendant_trans. apply parent. apply H. apply IHx. apply H0.
+    - rewrite desc_desc' in H. induction H.
+      + exists nil. simpl. apply H.
+      + destruct IHdesc'. exists (p :: x). simpl. rewrite andb_true_iff. split; assumption.
+  Qed. 
+
+  Lemma desc_list_all_desc: forall f u v l,
+    desc_list f u v l = true ->
+    (forall x, In x l -> desc f u x).
+  Proof.
+    intros. generalize dependent u. induction l; intros.
+    - inversion H0.
+    - simpl in *. rewrite andb_true_iff in H. destruct H. destruct H0. subst.
+      apply parent. apply H. eapply is_descendant_trans. apply parent. apply H.
+      apply IHl. apply H0. apply H1.
+    Qed. 
+    
     
 (*might need equal lemma to ensure it is acyclic but we 
 will see*)
