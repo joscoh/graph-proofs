@@ -335,7 +335,7 @@ Import ListNotations.
 Fixpoint desc_list (f: forest) (u v: vertex) (l : list vertex) : bool :=
   match l with
   | nil => is_child f u v
-  | x :: tl => is_child f u x && desc_list f x v tl
+  | x :: tl => is_child f x v && desc_list f u x tl
   end.
 
 (*Easier to prove for lists*)
@@ -370,25 +370,25 @@ Qed.
     (exists l, desc_list f u v l = true) <->
     desc f u v.
   Proof.
-    intros. split; intros. destruct H. generalize dependent u. induction x; intros.
+    intros. split; intros. destruct H. generalize dependent v. induction x; intros.
     - simpl in H. apply parent. apply H.
     - simpl in H. rewrite andb_true_iff in H. destruct H.
-      eapply is_descendant_trans. apply parent. apply H. apply IHx. apply H0.
-    - rewrite desc_desc' in H. induction H.
+      eapply is_descendant_trans. apply (IHx a). apply H0. apply parent. apply H. 
+    -  induction H.
       + exists nil. simpl. apply H.
-      + destruct IHdesc'. exists (p :: x). simpl. rewrite andb_true_iff. split; assumption.
+      + destruct IHdesc. exists (p :: x). simpl. rewrite andb_true_iff. split; assumption.
   Qed. 
 
   Lemma desc_list_all_desc: forall f u v l,
     desc_list f u v l = true ->
     (forall x, In x l -> desc f u x).
   Proof.
-    intros. generalize dependent u. induction l; intros.
+    intros. generalize dependent v. induction l; intros.
     - inversion H0.
     - simpl in *. rewrite andb_true_iff in H. destruct H. destruct H0. subst.
-      apply parent. apply H. eapply is_descendant_trans. apply parent. apply H.
-      apply IHl. apply H0. apply H1.
-    Qed. 
+      rewrite <- desc_list_iff_desc. exists l. apply H1.
+      eapply IHl. apply H0. apply H1.
+  Qed. 
     
     
 (*might need equal lemma to ensure it is acyclic but we 

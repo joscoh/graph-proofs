@@ -2952,6 +2952,8 @@ Proof.
 Qed.
 
 (** ** Lemmas for White Path Theorem **)
+
+(*[add_to_stack] only adds neighbors in the original graph*)
 Lemma add_to_stack_neighbors: forall v g r u p,
   In (u, Some p) (add_to_stack v g r) ->
   G.contains_edge g p u = true.
@@ -2986,6 +2988,7 @@ Proof.
   - inversion H0; subst; simpl in *; reflexivity.
 Qed.
 
+(*If (u, Some v) is on the stack, then the edge (v, u) exists in the graph*)
 Lemma stack_elts_neighbors: forall s g o u v,
   valid_dfs_state s g o ->
   In (u, Some v) (get_stack s) ->
@@ -3007,6 +3010,7 @@ Proof.
       * rewrite <- H4 in Heqs. clear H4. apply IHvalid_dfs_state. eapply in_pop_rev. rewrite Heqs. solve_in.
 Qed.  
 
+(*Every edge in the DFS forest is also in the original graph*)
 Lemma edges_in_forest_in_graph: forall s g o u v,
   valid_dfs_state s g o ->
   F.is_child (get_forest s) u v = true ->
@@ -3024,22 +3028,25 @@ Proof.
     + apply IHvalid_dfs_state. apply H0.
 Qed.
 
+(*If there is a path from one vertex to another in the DFS forest, then that same path exists
+  in the graph*)
 Lemma desc_implies_path: forall s g o u v l,
   valid_dfs_state s g o ->
   F.desc_list (get_forest s) u v l = true ->
-  Pa.path_list g u v l = true.
+  Pa.path_list_rev g u v l = true.
 Proof.
-  intros. generalize dependent u. induction l; intros.
+  intros. generalize dependent v. induction l; intros.
   - simpl in *. eapply edges_in_forest_in_graph. apply H. apply H0.
-  - simpl in *. simplify. eapply edges_in_forest_in_graph. apply H. apply H1.
+  - simpl in *. simplify. eapply edges_in_forest_in_graph. apply H. apply H1. 
 Qed. 
 
+(*Every descendant of u is white when u is discovered*)
 Lemma descendants_white_at_time_du: forall s g o u v x,
   valid_dfs_state s g o ->
   done s = true ->
   F.desc (get_forest s) u v ->
   valid_dfs_state x g o ->
-  M.find u (get_d_times s) = Some (get_time x) ->
+  M.find u (get_d_times x) = Some (get_time x) ->
   white x v = true.
 Proof.
   intros. pose proof (F.desc_in_forest _ _ _ H1). destruct_all.  rewrite <- (same_vertices _ _ _ _ H H0) in H5.
@@ -3047,20 +3054,19 @@ Proof.
   destruct_all. pose proof (all_times_when_done s g o v H H0 H5). destruct_all.
   assert (dfs_multi x s). assert (A:= H). assert (B:= H2). apply valid_begins_with_start in H.
   apply valid_begins_with_start in H2. pose proof (multi_from_start _ _ _ H H2). destruct H10.
-  apply H10. inversion H10. subst.
-  rewrite H3 in H6. inversion H6; subst. assert (C:=H7). eapply f_times_leq_current_time in H7.
-  pose proof (discover_before_finish _ _ _ _ _ _ A H3 C). omega. apply A. subst.
-  eapply done_cannot_step in H0. exfalso. apply H0. exists y. apply H11. apply A.
-  rewrite H3 in H6. inversion H6; subst. pose proof (desc_iff_time_interval
+  apply H10. inversion H10. subst. apply multi_refl. subst. eapply done_cannot_step in H0.
+  exfalso. apply H0. exists y. apply H11. apply A.
+  assert (A:=H3). eapply discovery_time_constant in H3. rewrite H3 in H6. inversion H6; subst.
+  pose proof (desc_iff_time_interval
   s g o u v (get_time x) x3 x0 x2 H H0 H3 H7 H8 H9). destruct H11. apply H11 in H1.
   destruct (white x v) eqn : ?. reflexivity. unfold white in *.
   assert (S.mem v(get_remain_d x) = false). simplify. pose proof (not_f_if_not_d
   x g o v H2). apply contrapositive in H17. destruct (S.mem v (get_remain_d x)).
   contradiction. reflexivity. rewrite H14. intro. inversion H19.
   rewrite v_discovered_iff_not_remain in H13. destruct_all. 
-  assert (A:= H13). eapply d_times_leq_current_time in H13.
-  eapply discovery_time_constant in A. rewrite A in H8. inversion H8; subst. omega.
-  apply H2. apply H10. apply H2. apply H2. apply H5.
+  assert (B:= H13). eapply d_times_leq_current_time in H13.
+  eapply discovery_time_constant in B. rewrite B in H8. inversion H8; subst. omega.
+  apply H2. apply H10. apply H2. apply H2. apply H5. apply H2. apply H10.
 Qed.
 
 (*The first half of the white path theorem: If v is a descendant of u when DFS finishes, then at time du,
@@ -3070,8 +3076,8 @@ Lemma desc_implies_white_path: forall s g o u v x,
   done s = true ->
   F.desc (get_forest s) u v ->
   valid_dfs_state x g o ->
-  M.find u (get_d_times s) = Some (get_time x) ->
-  (exists l, Pa.path_list g u v l = true /\ (forall y, In y l -> white x y = true) /\ white x v = true).
+  M.find u (get_d_times x) = Some (get_time x) ->
+  (exists l, Pa.path_list_rev g u v l = true /\ (forall y, In y l -> white x y = true) /\ white x v = true).
 Proof.
   intros. assert (A:=H1). rewrite <- F.desc_list_iff_desc in H1. destruct_all. exists x0.
   split. eapply desc_implies_path. apply H. apply H1. split. intros.
@@ -3085,10 +3091,8 @@ Qed.
 1. Prove that if (u, Some p) is on the stack, then it is on the stack when u is discovered
 2. Therefore, p is gray when u is discovered
 3. Therefore, u is a descendant of p
-DONE UP TO HERE
 4. Thus, at time dp, (p, u) will be included in the add_to_stack portion (because u is white), 
-  so (u, Some p) is on the stack,
-  so u is a descendant of p *)
+  so (u, Some p) is on the stack, so u is a descendant of p *)
 
 (*Alternative DFS multi that takes the step last. This helps ensure that the discovery time in the next
   proof does not change when we do induction*)
@@ -3116,6 +3120,7 @@ Proof.
   intros. eapply multi_step'. apply multi_refl'. apply H.
 Qed.
 
+(*Equivalence with original definition*)
 Lemma dfs_multi_equiv: forall s s',
   dfs_multi s s' <-> dfs_multi' s s'.
 Proof.
@@ -3137,7 +3142,7 @@ Proof.
     rewrite H3 at 1. rewrite <- app_assoc. reflexivity.
 Qed.
 
-(*part 1: If (u, Some p) is on the stack, then it is on the stack at time du*)
+(*Part 1: If (u, Some p) is on the stack, then it is on the stack at time du*)
 Lemma on_stack_discover: forall s g o u p x,
   valid_dfs_state s g o ->
   In (u, Some p) (get_stack s) ->
@@ -3279,6 +3284,151 @@ Proof.
   omega. apply H8. apply H10.
 Qed.
 
+(*Part 4: If (p, u) is in the graph and u is white at time dp, then u is a descendant of p in the forest*)
 
+(*If u is white and (v, u) is in the graph, then (u, Some v) is added to the stack*)
+Lemma white_neighbors_added: forall v g r u,
+  G.contains_edge g v u = true ->
+  u <> v ->
+  S.mem u r = true ->
+  In (u, Some v) (add_to_stack v g r).
+Proof.
+  intros. unfold add_to_stack. destruct (G.neighbors_set g v) eqn : ?.
+  remember ((fold_right
+     (fun (v0 : S.elt) (t0 : list (S.elt * option O.t)) =>
+      if S.mem v0 (S.remove v r) then (v0, Some v) :: t0 else t0) nil)) as f.
+  assert (forall l x, In x l -> x <> v  -> S.mem x r = true -> In (x, Some v) (f l)). { intros. induction l.
+  - inversion H2.
+  - subst. simpl in *. destruct (S.mem a (S.remove v r)) eqn : ?.
+    + destruct H2. subst. left. reflexivity. right. apply IHl. apply H2.
+    + destruct H2. subst. rewrite P2.FM.remove_neq_b in Heqb. rewrite Heqb in H4. inversion H4.
+      auto. apply IHl. apply H2. }
+  subst. apply H2. rewrite In_InA_equiv. rewrite <- P2.Dec.F.elements_iff. rewrite <- G.neighbors_set_2.
+    apply H. apply Heqo. apply H0. apply H1.
+    rewrite G.neighbors_set_1 in Heqo. rewrite <- G.neighbors_list_1 in Heqo.
+    apply G.contains_edge_1 in H. rewrite Heqo in H. inversion H.
+Qed.
+
+(*If u is white at time dp and if (p, u) is in the graph, then u is a descendant of p in the DFS forest*)
+Lemma white_neighbor_is_desc: forall s g o u p x,
+  valid_dfs_state x g o ->
+  valid_dfs_state s g o ->
+  done s = true ->
+  M.find p (get_d_times x) = Some (get_time x) ->
+  G.contains_edge g p u = true ->
+  white x u = true ->
+  F.desc (get_forest s) p u.
+Proof.
+  intros. unfold white in *. induction H; subst; simpl in *.
+  - rewrite P.F.empty_o in H2. inversion H2.
+  - inversion H5; assert (g = g0) by ((assert (A: get_graph s1 = g0) by (subst; reflexivity)); rewrite <- A;
+    symmetry; apply (graph_constant _ _ _ H)); subst; simpl in *.
+    + destruct (O.eq_dec p x).
+      * unfold O.eq in e. subst. assert (u <> x). intro. subst. simplify. rewrite remove_eq_false in H8.
+        inversion H8. eapply on_stack_descendant. apply H0. apply H1. eapply step. apply H.
+        apply H5. simpl. apply in_or_app. left. eapply white_neighbors_added. apply H3. apply H8.
+        simplify. rewrite P2.FM.remove_neq_b in H9. apply H9. auto.
+      * rewrite F.add_neq_o in H2. remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s'.
+        replace (d_times) with (get_d_times s') in H2 by (subst; reflexivity) . eapply d_times_leq_current_time in H2.
+        subst; simpl in *. omega. apply H. auto.
+    + destruct (O.eq_dec p x).
+      * unfold O.eq in e. subst. assert (u <> x). intro. subst. simplify. rewrite remove_eq_false in H8.
+        inversion H8. eapply on_stack_descendant. apply H0. apply H1. eapply step. apply H.
+        apply H5. simpl. apply in_or_app. left. eapply white_neighbors_added. apply H3. apply H8.
+        simplify. rewrite P2.FM.remove_neq_b in H9. apply H9. auto.
+      * rewrite F.add_neq_o in H2. remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s'.
+        replace (d_times) with (get_d_times s') in H2 by (subst; reflexivity) . eapply d_times_leq_current_time in H2.
+        subst; simpl in *. omega. apply H. auto.
+    + remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s'.
+      replace (d_times) with (get_d_times s') in H2 by (subst; reflexivity) . 
+      eapply d_times_leq_current_time in H2. subst; simpl in *. omega. apply H.
+Qed. 
+
+(*sketch of proof - we know that w is desc of u. If v already discovered at time dw, then v is desc of u
+      because u has not finished yet and it was white at time du. If not already discovered, follows by induction*)
+
+(*The other side of the white path theorem: If there is a white path from u to v at time du, then v is a 
+  descendant of u in the DFS forest
+Proof sketch: If the path is empty, then it follows immediately from the previous lemma. If not, then
+  we have that w is a descendant of u and (w, v) exists in g. Then, at time dw, if v is white, then
+  the claim again follows from the previous lemma (since v is a desc of w and w is a desc of u. Otherwise
+  if v is not white at time dw, then since v is white at time du, du < dv. Since w is a descendant, by
+  Corollary 22.8, we have that du < dw < fw < fu. So since v is not white at time du, we know that
+  du < dw < dv < fu. By the parenthesees theoren, du < dv < fv < fu, and by Corollary 22.8, v is
+  a descendant of u*)
+Lemma white_path_implies_desc: forall s g o u v x l,
+  valid_dfs_state s g o ->
+  valid_dfs_state x g o ->
+  done s = true ->
+  M.find u (get_d_times x) = Some (get_time x) ->
+  Pa.path_list_ind g u v (fun a => white x a) l ->
+  F.desc (get_forest s) u v.
+Proof.
+  intros. remember (fun a : G.vertex => white x a) as f. induction H3; subst.
+  - eapply white_neighbor_is_desc. apply H0. apply H. apply H1. apply H2. apply H3. apply H4.
+  - assert (G.contains_vertex g w = true). eapply G.contains_edge_1. apply H5.
+    pose proof (all_times_when_done _ _ _ _ H H1 H6). destruct_all;simplify.
+    pose proof (discovery_time_means_discovered _ _ _ _ _ H H7). destruct_all; subst.
+    destruct (white x2 v) eqn : ?.
+    + eapply F.is_descendant_trans. apply H10. eapply white_neighbor_is_desc. apply H12.
+      apply H. apply H1. apply H13. apply H5. apply Heqb.
+    + assert (G.contains_vertex g u = true). eapply discovered_vertices_in_graph. apply H0.
+      apply H2. pose proof (all_times_when_done _ _ _ _ H H1 H11). destruct_all.
+      assert (dfs_multi x s). { assert (A:= H). assert (B:= H0). apply valid_begins_with_start in H0.
+      apply valid_begins_with_start in H. pose proof (multi_from_start _ _ _ H H0). destruct H16. apply H16.
+      inversion H16. subst. apply multi_refl. subst. pose proof (done_cannot_step _ _ _ A H1). 
+      exfalso. apply H19. exists y. apply H17. } assert (B:= H2). eapply discovery_time_constant in H2. 
+      rewrite H2 in H14. inversion H14; subst. 
+      assert (G.contains_vertex g v = true). eapply G.contains_edge_2. apply H5.
+      pose proof (all_times_when_done _ _ _ _ H H1 H17). destruct_all.
+      assert (A:= H10). pose proof (desc_iff_time_interval _ _ _ _ _ _ _ _ _ H H1 H2 H15 H7 H8).
+      rewrite H20 in A. clear H20. 
+      pose proof (discovery_time_means_discovered _ _ _ _ _ H H18). destruct_all; subst.
+      assert (dfs_multi x x5). { assert (A:= H0). assert (C:= H22). eapply valid_begins_with_start in H0.
+      eapply valid_begins_with_start in H22. pose proof (multi_from_start _ _ _ H22 H0). destruct H21.
+      apply H21. assert (M.find v (get_d_times x) = Some (get_time x5)). eapply discovery_time_constant.
+      apply C. apply H23. apply H21. unfold white in *.
+      assert (S.mem v (get_remain_d x) = true). simplify. pose proof (v_discovered_iff_not_remain
+      _ _ _ _ A H17). destruct H29. apply contrapositive in H30. exfalso. apply H30.
+      exists (get_time x5). apply H27. rewrite H28. intro. inversion H31. }
+      apply time_incr_multi in H21. destruct H21. subst. 
+      pose proof (d_times_unique _ _ _ _ _ _ _ H H18 H2). assert (u = v). apply H21. reflexivity.
+      subst. assert (S.mem v (get_remain_d x5) = false). rewrite v_discovered_iff_not_remain.
+      exists (get_time x5). assumption. apply H22. assumption. unfold white in *. rewrite H27 in H4.
+      simpl in H4. inversion H4. 
+      assert (dfs_multi x5 x2). { assert (E:= H20). assert (F:= H12). apply valid_begins_with_start in H22.
+      apply valid_begins_with_start in H12. pose proof (multi_from_start _ _ _ H22 H12). destruct H27.
+      unfold white in Heqb. assert (S.mem v (get_remain_d x2) = false). simplify. 
+      epose proof (not_f_if_not_d _ _ _ _ F). apply contrapositive in H29. destruct (S.mem v (get_remain_d x2) ) eqn : ?.
+      rewrite Heqb in H29. contradiction. reflexivity. rewrite H28. intro. inversion H30.
+      rewrite v_discovered_iff_not_remain in H28. destruct_all. 
+      assert (C:=H28). eapply discovery_time_constant in H28. rewrite H28 in H23. inversion H23; subst.
+      eapply d_times_leq_current_time in C. apply time_incr_multi in H27. destruct H27. subst. apply multi_refl.
+      omega. apply F. apply F. apply H27. apply F. assumption. apply H27. } apply time_incr_multi in H27.
+      destruct H27. subst. pose proof (d_times_unique _ _ _ _ _ _ _ H H7 H18). assert (v = w).
+      apply H27. reflexivity. subst. assumption. assert (u <> v). intro. subst.
+      assert (exists n, M.find v (get_d_times x) = Some n). exists (get_time x). apply B.
+      rewrite <- v_discovered_iff_not_remain in H28. unfold white in *. rewrite H28 in H4. inversion H4.
+      apply H0. assumption. 
+      pose proof (times_ordering _ _ _ _ _ _ _ _ _ H H28 H2 H18 H15 H19). 
+      assert (get_time x < get_time x5 /\ get_time x5 < x1) by omega. apply H29 in H30; clear H29.
+      pose proof (desc_iff_time_interval _ _ _ _ _ _ _ _ _ H H1 H2  H15 H18 H19). rewrite H29. omega. apply H0. apply H16.
+Qed.
+
+(** The White Path Theorem: for any two vertices u and v, u is a descendant of v in the DFS forest
+    iff there exists a path of vertices from u to v such that at time du, all the vertices on the path except
+    u are colored white. **)
+Theorem white_path_theorem: forall s g o u v x,
+  valid_dfs_state s g o ->
+  valid_dfs_state x g o ->
+  done s = true ->
+  M.find u (get_d_times x) = Some (get_time x) ->
+  (exists l, Pa.path_list_ind g u v (fun a => white x a) l) <->
+  F.desc (get_forest s) u v.
+Proof.
+  intros. split; intros. destruct_all. eapply white_path_implies_desc; try(eassumption).
+  setoid_rewrite Pa.path_list_ind_rev.  pose proof desc_implies_white_path.
+  specialize (H4 _ _ _ _ _ _ H H1 H3 H0 H2). apply H4.
+Qed. 
 
 End DFS.
