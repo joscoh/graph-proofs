@@ -1,10 +1,11 @@
 Require Import Graph.
+Require Import Helper.
 
 Require Import Coq.FSets.FMapInterface.
 
 Require Import Coq.FSets.FSetProperties.
 Require Import Coq.FSets.FMapFacts.
-(*TODO: Fix the edge stuff to ensure that both vertices are there*)
+
 Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterface.Sfun O) <: (Graph O S).
 
   Import Graph.
@@ -12,76 +13,116 @@ Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterfa
   Module P := FSetProperties.WProperties_fun O S.
   Module P' := FMapFacts.WProperties_fun O M.
 
-  (*We represent graphs as a map from vertices to sets of edges (neighbors)*)
-  Definition graph := M.t (S.t).
+  (*We represent graphs as a map from vertices to sets of edges (neighbors). However, we want to make sure that
+    the map is well-formed (mainly this means that if an edge exists in the graph, then both endpoints must
+    exist. So we define a wf predicate and instantiate the graph as a dependent type*)
+  
+  Definition graph_all := M.t (S.t).
+  
+  Definition contains_vertex_all (g: graph_all) v := M.mem v g.
+
+  Definition add_vertex_all (g: graph_all) v := if (contains_vertex_all g v) then g else M.add v (S.empty) g.
+
+  Definition empty_all : graph_all := (M.empty (S.t)).
+
+  Definition add_edge_all (g: graph_all) u v := 
+    match (M.find u g) with
+    | None => g
+    | Some s => match (M.find v g) with
+                | None => g 
+                | _ => M.add u (S.add v s) g
+                end
+    end.
+
+  Inductive wf_graph : graph_all -> Prop :=
+  | emp: wf_graph empty_all
+  | addv: forall g v, wf_graph g -> wf_graph (add_vertex_all g v)
+  | adde: forall g u v, wf_graph g -> wf_graph (add_edge_all g u v).
+
+  Definition graph := {g: graph_all | wf_graph g}.
 
   Definition vertex := O.t.
 
-  Definition empty : graph := (M.empty S.t).
+  Definition empty : graph := (exist _ empty_all emp).
 
-  Definition contains_vertex (g: graph)(v: vertex) : bool := M.mem v g.
+  Definition contains_vertex (g: graph) (v: vertex) : bool :=
+    contains_vertex_all (proj1_sig g) v.
 
-  Definition contains_edge (g: graph)(u v: vertex): bool :=
-    match (M.find u g) with
+  Definition contains_edge (g: graph) (u v : vertex) : bool :=
+    match (M.find u (proj1_sig g)) with
     | None => false
     | Some s => S.mem v s
     end.
 
-  Definition add_vertex (g: graph)(v: vertex) : graph :=
-    M.add v (S.empty) g.
+  Definition add_vertex (g: graph)(v: vertex) : graph.
+    unfold graph. econstructor. apply (addv (proj1_sig g) v). unfold graph in g.
+    destruct g. simpl. apply w. 
+  Defined.
 
-  Definition add_edge (g: graph)( u v: vertex) : graph :=
-    match (M.find u g) with
-    | None => g
-    | Some s => M.add u (S.add v s) g
-    end.
+  Definition add_edge (g: graph)( u v: vertex) : graph. 
+    unfold graph in *. econstructor. apply (adde (proj1_sig g) u v). destruct g. simpl. apply w.
+  Defined.
 
   Definition neighbors_list (g: graph) (v: vertex) : option (list vertex) :=
-    match (M.find v g) with
+    match (M.find v (proj1_sig g)) with
     | None => None
     | Some s => Some (S.elements s)
     end.
 
   Definition neighbors_set (g: graph) (v: vertex) : option (S.t) :=
-    M.find v g.
+    M.find v (proj1_sig g).
 
   Definition fst_list {A B} (l : list (A * B)) : list A :=
     fold_right (fun (x : A * B) t => let (a,b) := x in a ::t) nil l.
 
   Definition list_of_graph (g: graph) : list vertex :=
-    fst_list (M.elements g).
+    fst_list (M.elements (proj1_sig g)).
 
   (*Couldn't find a better function in the interface, so have to add each element*)
   Definition set_of_graph (g: graph) : S.t :=
     fold_right (fun x t => S.add x t) S.empty (list_of_graph g).
 
-(*Theories*)
+  (*Theories*)
+
+  Ltac unfold_all:=
+  repeat(match goal with
+         | [ H: _ |- _] => progress (unfold contains_vertex in *; simpl)
+         | [ H: _ |- _] => progress (unfold contains_vertex_all in *; simpl)
+         | [ H: _ |- _] => progress (unfold empty in *; simpl)
+         | [ H: _ |- _] => progress (unfold add_vertex in *; simpl)
+         | [ H: _ |- _] => progress (unfold add_vertex_all in *; simpl)
+         | [ H: _ |- _] => progress (unfold add_edge in *; simpl)
+         | [ H: _ |- _] => progress (unfold add_edge_all in *; simpl)
+         | [ H: _ |- _] => progress (unfold contains_edge in *; simpl)
+         | [ H: _ |- _] => progress (unfold empty_all in *; simpl)
+         end). 
 
   Lemma empty_1: forall v,
     contains_vertex empty v = false.
   Proof.
-   intros. unfold contains_vertex. unfold empty. apply P'.F.empty_a.
+   intros. unfold_all. apply P'.F.empty_a.
   Qed.
 
   Lemma empty_2: forall u v,
     contains_edge empty u v = false.
   Proof.
-    intros. unfold contains_edge. unfold empty. rewrite P'.F.empty_o. reflexivity.
+    intros. unfold_all. rewrite P'.F.empty_o. reflexivity.
   Qed.
 
   Lemma add_vertex_1: forall g v,
     contains_vertex (add_vertex g v) v = true.
   Proof.
-    intros. unfold contains_vertex. unfold add_vertex. apply M.mem_1. unfold M.In.
-    exists S.empty. apply M.add_1. reflexivity.
-  Qed. 
-
+    intros. unfold_all. destruct g. simpl. destruct (M.mem v x) eqn : ?.
+    - apply Heqb.
+    - apply M.mem_1. unfold M.In. exists S.empty. apply M.add_1. reflexivity.
+  Qed.
+  
   Lemma contains_edge_1: forall g u v,
     contains_edge g u v = true ->
     contains_vertex g u = true.
   Proof.
-    intros. unfold contains_vertex. unfold contains_edge in H.
-    destruct (M.find u g) eqn : ?.
+    intros. unfold_all. destruct g; simpl in *. 
+    destruct (M.find u x) eqn : ?.
     - rewrite P'.F.mem_find_b. rewrite Heqo. reflexivity.
     - inversion H.
   Qed.
@@ -90,9 +131,28 @@ Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterfa
     contains_edge g u v = true ->
     contains_vertex g v = true.
   Proof.
-    intros. unfold contains_vertex. unfold contains_edge in H.
-    destruct (M.find u g) eqn : ?.
-    - rewrite P'.F.mem_find_b. rewrite Heqo. reflexivity.
+    intros. unfold_all; destruct g; simpl in *. destruct (M.find u x) eqn : ?. generalize dependent t.
+     induction w; intros; try(unfold_all).
+    - rewrite P'.F.empty_o in Heqo. inversion Heqo.
+    - destruct (M.mem v0 g) eqn : ?.
+      + eapply IHw. apply Heqo. apply H.
+      + destruct (O.eq_dec u v0).
+        * unfold O.eq in e. subst. rewrite P'.F.add_eq_o in Heqo. inversion Heqo; subst.
+          rewrite P.Dec.F.empty_b in H. inversion H. reflexivity.
+        * rewrite P'.F.add_neq_o in Heqo. rewrite P'.F.add_b. apply orb_true_iff.
+          right. eapply IHw. apply Heqo. apply H. auto.
+    - destruct (M.find u0 g) eqn : ?.
+      + destruct (M.find v0 g) eqn : ?. destruct (O.eq_dec u u0). unfold O.eq in e. subst.
+        rewrite P'.F.add_eq_o in Heqo. inversion Heqo; subst. destruct (O.eq_dec v v0). unfold O.eq in e.
+        subst. destruct (O.eq_dec v0 u0). unfold O.eq in e. subst. rewrite P'.F.add_b.
+        apply orb_true_iff. left. unfold P'.F.eqb. destruct (O.eq_dec u0 u0). reflexivity. exfalso.
+        apply n. reflexivity. rewrite P'.F.add_b. apply orb_true_iff. right.
+        rewrite P'.F.mem_find_b. rewrite Heqo1. reflexivity.
+        rewrite P.Dec.F.add_neq_b in H. rewrite P'.F.add_b. apply orb_true_iff. right. eapply IHw.
+        apply Heqo0. apply H. auto. reflexivity. rewrite P'.F.add_neq_o in Heqo. 
+        rewrite P'.F.add_b. apply orb_true_iff. right. eapply IHw. apply Heqo. apply H. auto.
+        eapply IHw. apply Heqo. apply H.
+      + eapply IHw. apply Heqo. apply H.
     - inversion H.
   Qed.
 
@@ -101,70 +161,59 @@ Module AdjacencyMap(O: UsualOrderedType)(S: FSetInterface.Sfun O)(M: FMapInterfa
     contains_vertex g u = true ->
     contains_edge (add_edge g u v) u v = true.
   Proof.
-    intros. unfold contains_vertex in *. unfold contains_edge. unfold add_edge. apply M.mem_2 in H0.
-    unfold M.In in H0. destruct H0. apply M.find_1 in H0. rewrite H0.
-    assert ( M.MapsTo u (S.add v x) (M.add u (S.add v x) g)). { 
-    apply M.add_1. reflexivity. } apply M.find_1 in H1. rewrite H1.
-    apply S.mem_1. apply S.add_1. reflexivity.
-  Qed.
+    intros. unfold_all. destruct g; simpl in *. rewrite P'.F.mem_find_b in H.
+    rewrite P'.F.mem_find_b in H0. destruct (M.find v x) eqn : ?.
+    destruct (M.find u x) eqn : ?. rewrite P'.F.add_eq_o. rewrite P.FM.add_b.
+    apply orb_true_iff. left. unfold P.FM.eqb. destruct (O.eq_dec v v). reflexivity.
+    exfalso. apply n. reflexivity. reflexivity. inversion H0. inversion H.
+  Qed. 
 
   Lemma add_edge_2: forall g u v a b,
     contains_edge g a b = true ->
     contains_edge (add_edge g u v) a b = true.
   Proof.
-    intros. unfold contains_edge in *. unfold add_edge. destruct (M.find a g) eqn : ?.
-    - destruct (M.find u g) eqn : ?.
+    intros. assert (contains_vertex g a = true) by (eapply contains_edge_1; eassumption).
+    assert (contains_vertex g b = true) by (eapply contains_edge_2; eassumption).
+     unfold_all. destruct g; simpl in *. destruct (M.find a x) eqn : ?.
+    - destruct (M.find u x) eqn : ?.
       + destruct (O.eq_dec a u) eqn : ?.
-        * setoid_rewrite e. setoid_rewrite e in Heqo.
-          rewrite Heqo0 in Heqo. inversion Heqo; subst.
-          assert (M.MapsTo u (S.add v t) (M.add u (S.add v t) g)). apply M.add_1. reflexivity.
-          apply M.find_1 in H0. rewrite H0. apply S.mem_1. apply S.mem_2 in H.
-          apply S.add_2. apply H.
-        * assert (M.MapsTo a t (M.add u (S.add v t0) g)). apply M.add_2. intro. subst.
-          apply n. apply eq_refl. apply M.find_2. apply Heqo. apply M.find_1 in H0.
-          rewrite H0. apply H.
-      + rewrite Heqo. apply H.
-  - inversion H.
-  Qed. 
-
+        * unfold O.eq in e. subst. destruct (O.eq_dec v b).
+          -- unfold O.eq in e. subst. rewrite P'.F.mem_find_b in H1. destruct (M.find b x) eqn : ?.
+             ++ rewrite P'.F.add_eq_o. rewrite P.Dec.F.add_b. apply orb_true_iff. left.
+                unfold P.Dec.F.eqb. destruct (O.eq_dec b b). reflexivity. exfalso. apply n. reflexivity.
+                reflexivity.
+             ++ inversion H1.
+          -- rewrite Heqo0 in Heqo. inversion Heqo; subst. destruct (M.find v x) eqn : ?.
+             rewrite P'.F.add_eq_o. rewrite P.FM.add_b. apply orb_true_iff. right. apply H. reflexivity.
+             rewrite P'.F.mem_find_b in H0. destruct (M.find u x) eqn : ?. inversion Heqo0; subst.
+             apply H. inversion H0.
+        * clear Heqs. destruct (M.find v x) eqn : ?. rewrite P'.F.add_neq_o. 
+          rewrite P'.F.mem_find_b in H0. destruct (M.find a x). inversion Heqo; subst. apply H. inversion H0.
+          auto. rewrite P'.F.mem_find_b in H0. destruct (M.find a x). inversion Heqo; subst. apply H. inversion Heqo.
+      +  rewrite P'.F.mem_find_b in H0. destruct (M.find a x). inversion Heqo; subst. apply H. inversion Heqo.
+    - inversion H.
+  Qed.
+ 
   Lemma add_edge_3: forall g u v a b,
     u <> a \/ v <> b ->
     (contains_edge g a b = contains_edge (add_edge g u v) a b).
   Proof.
-    intros. unfold contains_edge. unfold add_edge. destruct (M.find u g) eqn : ?.
-    - destruct (M.find a g) eqn : ?.
-      + destruct (O.eq_dec u a).
-        * setoid_rewrite e. setoid_rewrite e in Heqo. rewrite Heqo0 in Heqo.
-          inversion Heqo; subst. assert (M.MapsTo a (S.add v t) (M.add a (S.add v t) g)).
-          apply M.add_1. reflexivity. apply M.find_1 in H0. rewrite H0.
-          destruct (S.mem b t) eqn : ?.
-          -- symmetry. rewrite <- P.Dec.F.mem_iff. apply S.add_2. 
-             apply S.mem_2. apply Heqb0.
-          -- symmetry. rewrite <- P.FM.not_mem_iff. rewrite <- P.FM.not_mem_iff in Heqb0.
-             intro. rewrite P.Dec.F.add_iff in H1. destruct H1.
-              ++ subst. destruct H. setoid_rewrite e in H. contradiction. contradiction.
-              ++ contradiction.
-        * assert (M.MapsTo a t0 (M.add u (S.add v t) g)). apply M.add_2. intro.
-          subst. apply n. apply eq_refl. apply M.find_2. apply Heqo0. apply M.find_1 in H0.
-          rewrite H0. reflexivity.
-      + destruct (O.eq_dec u a).
-        * setoid_rewrite e in Heqo. rewrite Heqo0 in Heqo. inversion Heqo.
-        * destruct (M.find a (M.add u (S.add v t) g)) eqn : ?.
-          -- apply M.find_2 in Heqo1. apply M.add_3 in Heqo1.
-            erewrite M.find_1 in Heqo0. inversion Heqo0. apply Heqo1. intro.
-            subst. apply n. apply eq_refl.
-          -- reflexivity.
-   - reflexivity.
+    intros. unfold_all;destruct g; simpl in *. destruct (M.find u x) eqn : ?.
+    destruct (M.find v x) eqn : ?. destruct H.
+    rewrite P'.F.add_neq_o. reflexivity. apply H. destruct (O.eq_dec u a).
+    unfold O.eq in e. subst. rewrite P'.F.add_eq_o. rewrite Heqo. rewrite P.Dec.F.add_neq_b.
+    reflexivity. apply H. reflexivity. rewrite P'.F.add_neq_o. reflexivity. auto.
+    reflexivity. reflexivity.
   Qed.
 
   Lemma neighbors_list_1: forall g v,
     contains_vertex g v = false <-> neighbors_list g v = None.
   Proof.
-    intros. unfold contains_vertex. unfold neighbors_list. split; intros.
-    - destruct (M.find v g) eqn : ?. apply M.find_2 in Heqo.
-      assert (M.In v g). unfold M.In. exists t. assumption.
+    intros. unfold_all; destruct g; simpl in *. unfold neighbors_list. simpl in *. split; intros.
+    - destruct (M.find v x) eqn : ?. apply M.find_2 in Heqo.
+      assert (M.In v x). unfold M.In. exists t. assumption.
       apply M.mem_1 in H0. rewrite H0 in H. inversion H. reflexivity.
-    - destruct (M.find v g) eqn : ?. inversion H. destruct (M.mem v g) eqn : ?.
+    - destruct (M.find v x) eqn : ?. inversion H. destruct (M.mem v x) eqn : ?.
       apply M.mem_2 in Heqb. unfold M.In in Heqb. destruct Heqb.
       apply M.find_1 in H0. rewrite H0 in Heqo. inversion Heqo. reflexivity.
 Qed.
@@ -173,8 +222,8 @@ Qed.
     neighbors_list g u = Some l ->
     contains_edge g u v = true <-> In v l.
   Proof.
-    intros. unfold contains_edge. unfold neighbors_list in H.
-    destruct (M.find u g) eqn : ?.
+    intros. unfold_all; unfold neighbors_list in *; destruct g; simpl in *. 
+    destruct (M.find u x) eqn : ?.
     - inversion H; subst. split; intros. 
       + apply S.mem_2 in H0. apply S.elements_1 in H0. rewrite <- In_InA_equiv in H0. assumption.
       + apply S.mem_1. apply S.elements_2. rewrite <- In_InA_equiv. assumption.
@@ -185,7 +234,7 @@ Qed.
     neighbors_list g v = Some l ->
     StronglySorted (O.lt) l. 
   Proof.
-    intros. unfold neighbors_list in H. destruct (M.find v g).
+    intros. unfold neighbors_list in H; destruct g; simpl in *. destruct (M.find v x).
     - inversion H; subst. apply Sorted_StronglySorted. unfold Relations_1.Transitive.
       intros. eapply O.lt_trans. apply H0. apply H1. apply S.elements_3.
     - inversion H.
@@ -194,8 +243,8 @@ Qed.
   Lemma neighbors_set_1: forall g v,
     neighbors_set g v = None <-> neighbors_list g v = None.
   Proof.
-    intros. unfold neighbors_set. unfold neighbors_list. 
-    destruct (M.find v g).
+    intros. unfold neighbors_set. unfold neighbors_list. destruct g; simpl in *. 
+    destruct (M.find v x).
     - split; intros H; inversion H.
     - split; intros; reflexivity. 
   Qed.
@@ -204,7 +253,8 @@ Qed.
     neighbors_set g u = Some s ->
     contains_edge g u v = true <-> S.In v s.
   Proof.
-    intros. unfold contains_edge. unfold neighbors_set in H. rewrite H.
+    intros. unfold_all. unfold contains_edge. unfold neighbors_set in H. destruct g; simpl in *.
+    rewrite H.
     split; intros. apply S.mem_2. assumption. apply S.mem_1. assumption.
   Qed.
 
@@ -225,22 +275,22 @@ Qed.
   Lemma list_of_graph_1: forall g v,
     contains_vertex g v = true <-> In v (list_of_graph g).
   Proof.
-    intros. unfold contains_vertex. unfold list_of_graph. split; intros.
+    intros. unfold_all. unfold list_of_graph. destruct g; simpl in *. split; intros.
     - apply in_fst_list. apply M.mem_2 in H. unfold M.In in H.
-      destruct H. exists x. apply M.elements_1 in H.
-      unfold M.eq_key_elt in H. induction (M.elements g).
+      destruct H. exists x0. apply M.elements_1 in H.
+      unfold M.eq_key_elt in H. induction (M.elements x).
       + rewrite InA_nil in H. destruct H.
       + simpl. rewrite InA_cons in H. destruct H.
         * destruct H. simpl in *. left. subst. destruct a. simpl. reflexivity.
         * right. apply IHl. apply H.
     - rewrite <- in_fst_list in H. destruct H. 
-      assert (InA (M.eq_key_elt (elt:=S.t)) (v, x) (M.elements g)). { induction (M.elements g).
+      assert (InA (M.eq_key_elt (elt:=S.t)) (v, x0) (M.elements x)). { induction (M.elements x).
       - simpl in H. destruct H.
       - simpl in H. destruct H.
         + destruct a. inversion H; subst. apply InA_cons. left. 
           unfold M.eq_key_elt. split; reflexivity.
         + apply InA_cons. right. apply IHl. apply H. }
-        apply M.elements_2 in H0. apply M.mem_1. unfold M.In. exists x. apply H0.
+        apply M.elements_2 in H0. apply M.mem_1. unfold M.In. exists x0. apply H0.
 Qed.
 
   Lemma fst_list_preserves_sorting: forall l,
@@ -257,8 +307,8 @@ Qed.
   Lemma list_of_graph_2: forall g,
     StronglySorted (O.lt) (list_of_graph g).
   Proof.
-    intros. unfold list_of_graph. apply fst_list_preserves_sorting. apply Sorted_StronglySorted.
-    - unfold Relations_1.Transitive. intros. destruct x. destruct y. destruct z.
+    intros. unfold list_of_graph. destruct g; simpl. apply fst_list_preserves_sorting. apply Sorted_StronglySorted.
+    - unfold Relations_1.Transitive. intros. destruct x0. destruct y. destruct z.
       eapply O.lt_trans. unfold M.lt_key in *. apply H. apply H0.
     - apply M.elements_3.
   Qed. 
@@ -274,11 +324,6 @@ Qed.
         + right. apply IHl. apply H.
         + apply P.FM.add_iff. destruct H. left. apply H. right. apply IHl. apply H. }
         rewrite list_of_graph_1. rewrite H. reflexivity.
-  Qed. 
+  Qed.
 
-
-End AdjacencyMap.
-      
-
-     
-    
+End AdjacencyMap. 
