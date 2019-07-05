@@ -4,6 +4,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
 \usepackage{listings}
+\usepackage{algpseudocode}
  
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{corollary}{Corollary}[theorem]
@@ -13,103 +14,373 @@
 
 \begin{document}
 \maketitle
-\section{Parenthesis Theorem}
+The document contains sketches of the major lemmas and theorems proved.
+\section{The algorithm}
+I have defined a DFS implementation both as an inductive relation and as an executable function (and have proven their equivalence). For the purposes of proofs, the inductive relation is used, as that makes it easier to reason about how the algorithm proceeds as well as to state theorems that start with "at the time when v is discovered ...". Throughout the algorithm, we keep track of the following:
+\begin{itemize}
+\item
+$remain\_d$: The set of vertices that have not yet been discovered
+\item
+$remain\_f$: The set of vertices that have not yet been finished
+\item
+$d\_times$: A map of vertices to their discovery times
+\item
+$f\_times$: A map of vertices to their finish times
+\item
+$time$: The current time
+\item
+$f$: The current forest that we build up throughout the algorithm
+\item
+$stack$: The stack, which consists of tuples of type (vertex, option vertex), and which represent a vertex and its optional parent
+\end{itemize}
+For simplicity, as well as consistency with the CLRS algorithm, we define the following:
+\begin{itemize}
+\item
+A vertex is white if it is in both $remain\_d$ and $remain\_f$ (This is equivalent to being in $remain\_d$ alone)
+\item
+A vertex is gray if it is $remain\_f$ but is not in $remain\_d$
+\item
+A vertex is black if it is not in $remain\_f$
+\end{itemize}
+The basic execution of the algorithm is as follows:
+\pagebreak
+\begin{algorithmic}
+\While {$remain\_d$ is not empty}
+\While{The vertex on the top of the stack is black}
+\State{Pop the stack}
+\EndWhile
+\If{The stack is empty}
+\State{Push the smallest white vertex on the stack with parent None}
+\EndIf
+\State{Let (v, o) be the element on the top of the stack}
+\If{v is white and $o$ is None}
+\State{Color v gray}
+\State{Add v with the current time to $d\_times$}
+\State{Add v as a new root in the DFS forest}
+\State{Add all of v's white neighbors to the stack with parent (Some v)}
+\ElsIf{v is white and o=Some p}
+\State{Color v gray}
+\State{Add v with the current time to $d\_times$}
+\State{Add v as a child of p in the DFS forest}
+\State{Add all of v's white neighbors to the stack with parent (Some v)}
+\ElsIf{v is gray}
+\State{Color v black}
+\State{Add v with the current time to $f\_times$}
+\State{Pop the stack}
+\EndIf
+\State{Increment the current time}
+\EndWhile
+\end{algorithmic}
+The intent of this algorithm is to adhere as closely as possible to the CLRS implementation while replacing the recursive nature of the algorithm with an explicit stack. The one key difference is that before we look at the vertex on the top of the stack in detail, we remove all black vertices from the top of the stack, and then add the next white vertex to the stack. The ensures that in each iteration of this algorithm, we are either discovering or finishing a vertex, which makes the proof of termination much simpler.
+\section{Parentheses Theorem}
 \begin{lemma}
-If $(x, \text{Some } y)$ is on the stack, then the stack looks like
-\begin{lstlisting}[language=Caml][Objective]
-l1 ++ (x, Some y) ++ l2 ++ (y,o) :: tl
-\end{lstlisting}
-And for every $(u, \text{Some t})$ in $l2$, $t=y$.
+If (u, Some v) is on the stack, then v is either gray or black.
 \end{lemma}
 \begin{proof}
-When a vertex $(a,b)$ is added, this is clearly true when $(a,b)=(y,o)$. It is true for the rest of the list (and in all other cases) by induction.
+We prove the claim by induction on the DFS inductive relation. This gives us 3 cases:
+\begin{enumerate}
+\item
+If the top of the stack is (x, None) and x was white, then the only vertices with a parent on the stack have x as a parent, and x is gray.
+\item
+If the top of the stack is (x, Some y) and x was white, then the stack is $l1 ++ (x, \text{Some }y) l2$, where l1 consists of x's children and the previous stack included (x, Some y) ++ l2. So if (u, Some v) is in l1, then v = x, which is gray. If it is in the rest of the stack, the claim follows by induction (since v was gray or black before, and we did not change it).
+\item
+If the top of the stack is (x, o) and x is gray, then the claim follows immediately by induction.
+\end{enumerate}
 \end{proof}
+The following lemma characterizes the stack when a single vertex is gray. This holds for any such state, and is useful for then proving claims about specific states within this time interval.
 \begin{lemma}
-When $v$ is gray, the stack looks like
-\begin{lstlisting}[language=Caml][Objective]
+If v is gray, then the stack looks like
+\begin{lstlisting}[language=Haskell]
 l1 ++ (v, o) :: l2
 \end{lstlisting}
-Furthermore, $l1$ does not contain $v$ (proved), $l2$ does not contain $(x, \text{Some }v)$ for any $x$ (proved), and if $o=\text{Some }y$, then $l1$ does not contain $y$ as a parent or a child. 
+And the following hold:
+\begin{itemize}
+\item
+v does not appear in l1 (that is, for all o, (v, o) does not appear in l1)
+\item
+v does not appear as a parent in l2
+\item
+For all (x, Some y) in l1, either y=v or y is a descendant of v in the DFS forest
+\end{itemize}
 \end{lemma}
 \begin{proof}
-By induction on dfs-step. The claim is trivially true if we add $(x, None)$ (since the rest of the stack is empty). Thus, assume we are adding $(x, \text{Some }p$). If $(x, \text{Some }p$)= $(v, \text{Some }y)$, then the claim is true, since we do not add $p$ as a child (it must be gray), and the parents are all $p$ ($p\neq x$ since $(x, \text{Some } x)$ never appears in the stack. Otherwise, if $(v, \text{Some }y)$ occurs on the left part of the stack, then we have a contradiction, since $v$ is gray. If it appears on the right, then once again $y$ is not added as a child because it is gray, and it is not added as a parent because 
-
- When we add a new vertex (trivial in case where we add $(x, None)$), We know that $l1$ does not contain the parent of 
-\end{proof}
-
-
-
-
-Known Results:
-\begin{lemma}
-$\forall$ $x$, $u$, if $(x, Some(u))$ is on the stack, then $u$ is gray.
-\end{lemma}
-\begin{lemma}
-$\forall u$, if $u$ is gray, then $u$ is on the stack.
-\end{lemma}
-Results to prove:
-\begin{lemma}
-$\forall x~y$, if $(x, Some y)$ is on the stack, then the stack looks like
-\[l1 ++ (x, Some y) ++ l2 ++ (y, o) ++ l3\]
-Where every element of $l2$ is of the form $(z, Some y)$ for some $z$.
-\end{lemma}
-\begin{proof}
-By induction on the valid state relation.
-\\The base case is trivial because $(x, Some y)$ cannot be on the stack.
-\\If we took a step, then we had 3 cases:
-\\If the last step was dfs-discover-root, then the stack must be
-\[l1 ++ (x, Some y) ++ l2 ++ (y, None) :: nil\]
-And by the adding children function (add-to-stack), the claim is true.
-\\If the last step was dfs-discover-child, then the stack must be
-\[(\text{children of z}) ++ (z, Some u) ++ tl\]
-We know that $(x, Some y)$ is on the stack. If it is in the children section, then $y=z$ and the claim is true. If it is $(z, Some u)$ or in $tl$, then it is true by induction, since this part of the stack has not changed.
-\\Finally, if the last step was dfs-finish, then the claim is true by induction.
-\end{proof}
-\begin{lemma}
-$\forall s (state), u$, if $u$ is gray, then the stack looks like
-\[l1 ++ (u, o) ++ l2\]
-For some $o$. We have the following properties:
+We will prove the claim by induction on the DFS inductive relation. This gives us 3 cases:
 \begin{enumerate}
 \item
-$u$ is not in $l1$
+If the top of the stack is (x, None) and x was white, then it must be the case that v = x (since there are no other gray vertices on the stack). Then l2 = nil, so the second condition holds trivially. l1 consists of v's children who are white, which does not include v (since v is gray now), and for every (x, Some y) in l1, y = v, so the third condition is true.
 \item
-$u$ does not appear as a parent in $l2$ (ie, $(x,Some~u)$ is not in $l2$ for any $x$)
+If the top of the stack is (x, Some y) and x was white, then either v = x or v $\neq$ x. If v = x, then l1 consists only of v's children who are white, so by the same logic as the previous part, conditions 1 and 3 hold. Suppose condition 2 did not hold, so (u, Some x) was in l1. Then, by Lemma 2.1, x was gray in the previous state, a contradiction.
+\\If v $\neq$ x, then v was gray in the previous state as well. So the previous stack looked like $l ++ (v, o) :: t$, and once we popped off the black vertices, the current stack looks like $l'' ++ (x, \text{Some }y) ++ l' ++ (v, o) :: t$ (since we could not have popped (v,o) as it is gray), and $l''$ consists only of children of x. So let $l1=l'' ++ (x, \text{Some }y) ++ l'$ and let $l2 = t$.  $v$ does not appear in $l'$ by induction. $v \neq x$ by assumption, and v cannot appear in $l1$ since it is gray. Thus, condition 1 is true. Condition 2 follows by induction. Condition 3 holds on $(x, Some y) ++ l'$ by induction, so we need to show that for all $(a, Some b)$ in $l1$, either $b=v$ or $v$ is a descendant of $v$. Since $l1$ consists of children of $x$, $b=x$, and by induction, y = v or y is a descendant of v. Then, we add x as a child of y in this step, so either x is a child of v, or x is a child of y, who is a descendant of v. So x is a descendant of v, proving condition 3.
 \item
-If $o=Some~y$, then $y$ does not appear as either a parent or child in $l1$.
-\item
-If $v$ is in $l1$ and $v$ is gray, then $v$ is a descendant of $u$ in the DFS forest
-\end{enumerate}
-\end{lemma}
-\begin{proof}
-We proceed by induction on the claim that $s$ is a valid state. In the start state, this is trivial, since there are no gray vertices.
-\\Then, assume it holds for state $s$ and we want to show that it holds for state $s'$ such that $dfs-step~s~s'$ holds.
-\begin{enumerate}
-\item
-If the last step taken was a discover-root, then we know the stack looks like
-\[l1 ++ (x, None) :: nil\]
-Then, it must be the case that $x=u$ because it is the only gray vertex on the stack. Then $x$ is not in $l1$ (because we do not add the same vertex to the children added to the stack - proved), proving claim $a$. $l2$ is empty, so $b$ is true. $o=None$, so $c$ is vacuously true. Finally, there are no other gray vertices, so $d$ is vacuously true.
-\item
-If the last step taken was a discover-child, then the stack looks like
-\[ \text{(children of x)} ++ (x, Some~y) ++ tl\]
-where 
-\[(s, Some~y) ++ tl = \text{remove-black } st \]
-Where $st$ was the previous stack.
-\\Then, we proceed by cases:
-\\Case 1: $u=x$. Then $a$ is true by the behavior of adding children. $b$ must be true because if $Some~u$ were in $tl$, then, $u$ would have been gray in the previous state, a contradiction. We know that $y$ must be gray (proved), so it is not added to the children of $x$. Thus, $c$ is true (since all added vertices have a parent $x$). Finally, $d$ is again true vacuously.
-\\Case 2: $u\neq x$.
-\\Then, the stack must look like
-\[ \text{(children of x)} ++ (x, Some~y) ++ l1 ++ (u, o) ++ tl\]
-We do not add $u$ to the children of $x$ (since it is gray) and $u\neq u$. $u$ is not in $l1$ by induction, so $a$ is true.
-\\$b$ is true by induction (since $tl$ has not changed)
-\\
-\\Then, we proceed by cases:
-\\Case 2.1: $u=y$. In this case, 
+If the top of the stack is (x, Some y) and x is gray, then the claim follows by induction (since (v, o) $\neq$ (x, Some y) as x turns black while v is gray).
 \end{enumerate}
 \end{proof}
-\begin{theorem}
-$\forall u, v, G$, if $u\in G$ and $v\in G$, then $d(u) < d(v) < f(v) < f(u)$, $d(v) < d(u) < f(u) < f(v)$, $d(u) < f(u) < d(v) < f(v)$, or $d(v) < f(v) < d(u) < f(u)$.
+In particular, we can expand on the previous result to get that the left side of the stack is constant when a vertex is gray. We only add and remove from the right side of the stack.
+\begin{lemma}
+If v is gray and the stack looks like $l1 ++ (v, o) :: l2$ such that v does not appear in l1, then at any future point when v is gray, the stack looks like $l' ++ (v, o) :: l2$ and $v$ does not appear in $l'$. In other words, the left side of the stack is constant.
+\end{lemma}
+\begin{proof}
+It suffices to prove this for 1 step of the algorithm. We proceed by inversion on the inductive DFS relation:
+\begin{enumerate}
+\item
+If the top of the stack is (x, None) and x was white in the previous step, then the only gray vertex is x. But x was not gray in the previous step, a contradiction.
+\item
+If the top of stack is (x, Some y) and x was white in the previous step, then the stack now looks like $c ++ (x, \text{Some }y) ++ l' ++ (v, o) :: l2$, where $c$ are the white children of $x$, $l'$ is a sublist of $l1$, and $l2$ is the same as in the previous step. We must show that $v$ does not appear in $c ++ (x, \text{Some }y) ++ l'$. $v$ is gray, so it is not in $c$. $v \neq x$ since $x$ was white in the previous step. $v$ is not in $l'$ by assumption.
+\item
+If the top of the stack is (x, o) and x was gray in the previous step, then either v = x or $v\neq x$. If v = x, then v is no longer gray in the current state, a contradiction. Otherwise, $v \neq x$ so the claim follows by assumption (we only got rid of a vertex in $l1$).
+\end{enumerate}
+\end{proof}
+The following lemmas are mainly proved by tedious reasoning about the stack, using the above two lemmas and equating various representations of the stack. For now, I am omitting the proofs.
+\begin{lemma}
+If the stack looks like
+\begin{lstlisting}[language=Haskell]
+l1 ++ (u, Some p) :: l2 ++ (v, o) :: l3
+\end{lstlisting}
+and v does not occur in (l1 ++ (u, Some p) :: l2),
+if $u$ and $v$ are gray, then after 1 step, if $v$ is black, then $u$ is black.
+\end{lemma}
+\begin{lemma}
+If two gray vertices u and v are on the stack such that u occurs before v in the stack (ie, the stack looks like 
+\begin{lstlisting}[language=Haskell]
+l1 ++ (u, Some p) :: l2 ++ (v, o) :: l3
+\end{lstlisting}
+and v does not occur in (l1 ++ (u, Some p) :: l2), then if after one step, u is still gray, then there is an l1 such that the stack looks like
+\begin{lstlisting}[language=Haskell]
+l1 ++ (u, Some p) :: l2 ++ (v, o) :: l3
+\end{lstlisting}
+and v does not occur in (l1 ++ (u, Some p) :: l2).
+\end{lemma}
+\begin{lemma}
+If the stack looks like
+\begin{lstlisting}[language=Haskell]
+l1 ++ (u, Some p) :: l2 ++ (v, o) :: l3
+\end{lstlisting}
+and v does not occur in (l1 ++ (u, Some p) :: l2),
+if $u$ and $v$ are gray, then at any future step, if $v$ is black, then $u$ is black.
+\end{lemma}
+\begin{proof}
+Follows from the previous two lemmas by induction.
+\end{proof}
+We can now begin reasoning about discovery and finish times more directly.
+\begin{lemma}
+At the discovery time of v, the following hold:
+\begin{itemize}
+\item
+v is gray
+\item
+The stack looks like 
+\begin{lstlisting}[language=Haskell]
+l1 ++ (v, o) :: l2
+\end{lstlisting}
+\item
+v does not occur in l1
+\item
+Every vertex in l1 is white
+\end{itemize}
+\end{lemma}
+\begin{proof}
+This follows easily from the inductive relation. It only requires knowing that any vertex's finish time must be $\leq$ the time of the current step, which is a very simple proof.
+\end{proof}
+\begin{lemma}
+If p and v are two distinct vertices such that p is gray when v is discovered, then at any future point, if p is black, so is v.
+\end{lemma}
+\begin{proof}
+Since p is gray at time dv, by Lemma 2.7, we know that p is in l2. Thus, we can apply Lemma 2.6 for the desired result.
+\end{proof}
+\begin{lemma}
+If a vertex u has a finish (or discovery) time, then there was a previous step at which it was finished (or discovered).
+\end{lemma}
+\begin{proof}
+Follows from induction on the DFS step relation.
+\end{proof}
+\begin{lemma}
+If v is a vertex in the graph that is not black, then there is a future state during which it will be finished.
+\end{lemma}
+\begin{proof}
+We know that every vertex is finished at the end. By Lemma 2.9, there is a state during which it was finished. If that state occured before the current one, then v is black, a contradiction. So it must occur after.
+\end{proof}
+Last two key lemmas for Parentheses Theorem:
+\begin{lemma}
+If u and v are two distinct vertices such that u is gray when v is discovered, then v finishes before u.
+\end{lemma}
+\begin{proof}
+By Lemma 2.8, at any future point, if u is black, then so is v. So at the time when u becomes black, v must have already finished. Thus v finishes before u.
+\end{proof}
+\begin{lemma}
+For any distinct vertices u and v, if $ du < dv < fu$, then
+\\ $du < dv < fv < fu$.
+\end{lemma}
+\begin{proof}
+At the time when v is discovered, u must already be discovered, but it is not finished. So u is gray. Thus, the claim follows from Lemma 2.11.
+\end{proof}
+\begin{theorem}[Parentheses Theorem]
+For any distinct vertices u and v, exactly one of the following holds:
+\begin{itemize}
+\item
+$du < dv < fv < fu$
+\item
+$dv < du < fu < fv$
+\item
+$du < fu < dv < fv$
+\item
+$dv < fv < du < fu$
+\end{itemize}
+\begin{proof}
+For any two vertices u and v, either $du < dv$ or $dv < du$. Without loss of generality, suppose $du < dv$. Then, since every vertex is discovered before it finishes, we have either $du < fu < dv$, in which case we have that $du < fu < dv < fv$, or $du < dv < fu$, in which case we apply Lemma 2.12 for the desired result. The other case follows similarly.
+\end{proof}
+\end{theorem}
+\section{Corollary 22.8 (in CLRS)}
+\begin{lemma}
+If u and v are distinct vertices, then if u is gray when v is discovered, v is a descendant of u in the DFS forest.
+\end{lemma}
+\begin{proof}
+When v is discovered, either it appears on the stack as (v, None), or as (v, Some p). In the first case, v is the only gray vertex on the stack, so we have a contradiction. In the second case, the stack looks like $c ++ (v, \text{Some }p) :: l$ where $c$ are the children of $v$ (all white) and $u$ appears in $l$ (since it is gray). By Lemma 2.2, we know that the stack also looks like $l1 + (u, o) :: l2$, where $u$ does not appear in $l1$ and for all (a, Some b) in $l1$, either $b=u$ or $b$ is a descendant of $u$ in the DFS forest. Clearly, (v, Some p) must occur in $l1$ (otherwise this implies that $u$ is a child of $v$ and is white, a contradiction). Therefore, either $p=u$ or $p$ is a descendant of $u$, so since we add $v$ as a child of $p$, $v$ is a descendant of $u$.
+\end{proof}
+\begin{lemma}
+For any two distinct vertices u and v, if $du < dv < fv < fu$, then v is a descendant of u in the DFS forest.
+\end{lemma}
+\begin{proof}
+Since $du < dv < fu$, at time dv, u has started but not finished, so it is gray. Thus, the result follows from Lemma 3.1.
+\end{proof}
+\begin{lemma}
+If (u, Some v) appears on the stack, then v is gray.
+\end{lemma}
+\begin{proof}
+We proceed by induction on the DFS inductive relation.
+\begin{enumerate}
+\item
+If (x, None) was on the top of the stack and x was white, then (u, Some v) must occur in the portion of the stack that consists only of children of x, so v = x. x is gray, so the claim is true.
+\item
+If (x, Some y) was on the top of the stack and x was white, then if (u, Some y) occurs in the portion of the stack consisting of children of x, the claim is true for the same reason. Otherwise, everything else was on the stack previously, so the claim follows by induction.
+\item
+If (x, o) was on top of the stack and x was gray, then it suffices to show that v $\neq$ x (everything else that was gray is still gray). Assume $v=x$. Then $x$ was gray in the previous state, so by lemma 2.2, the previous stack was $l1 ++ (x, o') :: l2$ and $x$ does not appear as a parent in l2 and $x$ does not appear in $l1$. After we remove the black vertices from the top of the stack, the current stack is $l ++ (x, o') :: l2$. But the top of the stack is $(x, o)$, so $l=[]$ (if not, then $x$ appears in $l1$, a contradiction). So we know that $(u, Some v)$ cannot occur in l2. If (u, Some v) = (x, o'), then $u=v=x$, a contradiction, since $(x, Some x)$ cannot appear on the stack.
+\end{enumerate}
+\end{proof}
+\begin{lemma}
+If (u, v) is an edge in the DFS forest (ie: v is a child of u in the DFS forest) at time dv, then u is gray at time dv.
+\end{lemma}
+\begin{proof}
+When v is discovered, v is not already in forest, and we add an edge from its parent in the stack (u). Therefore, we must only prove that u is gray, which follows from Lemma 3.3 
+\end{proof}
+\begin{lemma}
+(u,v) is an edge in the DFS forest iff it is an edge at time dv.
+\end{lemma}
+\begin{proof}
+Follows from inspection of the algorithm: we only add an edge for a given vertex when it becomes gray, which can happen only once.
+\end{proof}
+\begin{lemma}
+If (u,v) is an edge in the DFS forest, then $du < dv < fv < fu$.
+\end{lemma}
+\begin{proof}
+Since (u,v) is in the DFS forest, by Lemma 3.5, it is an edge at time dv. By lemma 3.4, u is gray at time dv. By lemma 2.11, v finishes before u, and by Lemma 2.12, $du < dv < fv < fu$.
+\end{proof}
+\begin{lemma}
+Every vertex in the forest was in the original graph.
+\end{lemma}
+\begin{lemma}
+At the end of the algorithm, every vertex in the original graph is in the forest.
+\end{lemma}
+\begin{proof}
+We begin the algorithm with all the vertices in the graph in $remain\_d$. A vertex is added to the forest when it becomes gray (or alternatively, gets a discovery time). A vertex has a discovery time iff it is not white. At the end of the algorithm, there are no white vertices. Thus, all vertices have discovery times, and so they were all added to the forest.
+\end{proof}
+\begin{lemma}
+If u is a descendant of v in the DFS forest, then $u \neq v$ (This is equivalent to proving that the DFS forest is acyclic).
+\end{lemma}
+\begin{proof}
+Follows from properties of forests: If u is a descendant of v, then u had to exist in the forest before v was added, but v could not have existed in the forest, so u and v cannot be the same vertex.
+\end{proof}
+\begin{lemma}
+If u and v are two distinct vertices such that v is a descendant of u in the DFS forest, then $du < dv < fv < fu$.
+\end{lemma}
+\begin{proof}
+Follows by induction on the proof that v is a descendant of u. If v is a child of u, it follows by Lemma 3.6. Otherwise, if w is a descendant of u, and v is a child of w, by the induction hypothesis, $du < dw < fw < fu$, and by Lemma 3.6, $dw < dv < fv < fw$. The claim follows from these inequalities.
+\end{proof}
+\begin{theorem}[Corollary 22.8]
+For any two vertices u and v, v is a descendant of u in the DFS forest iff $du < dv < fv < fu$.
 \end{theorem}
 \begin{proof}
-It suffices to show that if $d(u) < d(v) < f(u)$, then $f(v) < f(u)$. (We know that $f(v) > d(v)$ already. If the above inequality holds, then at time $d(v)$, it must be the case that $u$ is gray. 
+$(\implies)$: since v is a descendant of u, $v\neq u$ by Lemma 3.9. The result follows by Lemma 3.10.
+\\$(\impliedby)$: Since u and v have different discovery times, they cannot be the same vertex. Thus $v\neq u$. The result follows by Lemma 3.2.
+\end{proof}
+\section{White Path Theorem}
+\begin{lemma}
+If (u, Some v) is on the stack, then the edge (v, u) exists in the graph.
+\end{lemma}
+\begin{proof}
+The only time it could have been added is when v was discovered, when we add v's children to the stack.
+\end{proof}
+\begin{lemma}
+If v is a child of u in the DFS forest, then (u,v) exists in the graph.
+\end{lemma}
+\begin{proof}
+The only time we add the child is when we discover v and see (v, Some u) on the stack. Thus, the claim follows by Lemma 4.1.
+\end{proof}
+\begin{lemma}
+If $v_0, v_1,...,v_k$ forms a path from $u$ to $v$ in the DFS forest, then $v_0,v_1,...v_k$ forms a path from $u$ to $v$ in the original graph.
+\end{lemma}
+\begin{proof}
+Follows easily by induction on the path and Lemma 4.2.
+\end{proof}
+\begin{lemma}
+If v is a descendant of u in the DFS forest at the end of the algorithm, then v was white at time du.
+\end{lemma}
+\begin{proof}
+By Theorem 3.11, $du < dv < fv < fu$. Therefore, v has not yet been discovered at time du, so it is white.
+\end{proof}
+\begin{lemma}
+If v is a descendant of u in the DFS forest, then at time du, there exists a path of vertices from u to v such that every vertex on the path (except for u) are white.
+\end{lemma}
+\begin{proof}
+If v is a descendant of u, then there is a path of vertices $v_0,...v_k$ such that for all $v_i$, $v_i$ is a descendant of u. Thus, let this be the path. We want to show that all vertices along this path (as well as v) are white. For any given $v_i$ (as well as v), this follows from Lemma 4.4.
+\end{proof}
+\begin{lemma}
+If (u, Some p) is on the stack, then it is on the stack at time du.
+\end{lemma}
+\begin{proof}
+We want to prove the claim for all states, so consider 3 possible cases:
+\begin{enumerate}
+\item
+The state is the state at which u is discovered. Then, the claim follows by assumption.
+\item
+The state occurs before u was discovered. Then, we only ever remove a vertex from the stack if it is gray or black, but u is white. So u cannot be removed from the stack during any one of these states. Thus, it must still be there at time du.
+\item
+The state occurs after u was discovered. Then, since we never add u to the stack again once it is no longer white, it must have been on the stack during the previous state. Thus, it cannot have been added at any point after u was discovered.
+\end{enumerate}
+\end{proof}
+\begin{lemma}
+If (u, Some p) is on the stack, then p is gray when u is discovered.
+\end{lemma}
+\begin{proof}
+By lemma 4.6, (u, Some p) is on the stack when u is discovered. By Lemma 3.3, p is gray at this time.
+\end{proof}
+\begin{lemma}
+If (u, Some p) appears on the stack at any point, then u is a descendant of p in the DFS forest when the algorithm finishes.
+\end{lemma}
+\begin{proof}
+If (u, Some p) appears on the stack, then p must be gray at time du by Lemma 4.7. Therefore, by Lemma 2.11, u finishes before p, so we have that $dp < du < fp$. Then, by lemma 2.12, $dp < du < fu < fp$, and by Theorem 3.11, this implies that $u$ is a descendant of $p$ in the DFS forest.
+\end{proof}
+\begin{lemma}
+If the edge (p, u) exists in the graph and if u is white at time dp, then u is a descendant of p in the DFS forest (when the algorithm finishes).
+\end{lemma}
+\begin{proof}
+At time dp, since u is white, u will be added to the stack as a child of p (ie, (u, Some p) will be added to the stack). Thus, by Lemma 4.8, u is a descendant of p in the DFS forest when the algorithm terminates.
+\end{proof}
+\begin{lemma}
+If there is a white path from u to v at time du, then v is a descendant of u in the DFS forest.
+\end{lemma}
+\begin{proof}
+If the path is empty (implying that (u,v) exists in the graph), then the claim follows from Lemma 4.9. Otherwise, the path is non-empty. So there is a vertex w such that there is a white path from u to w, w is white at time du, (w,v) exists in the graph, and v is white at time du. We consider two cases:
+\begin{enumerate}
+\item
+v is white at time dw. Then, by Lemma 4.9, v is a descendant of w, and since w is a descendant of u, we know that v is a descendant of u, proving the claim.
+\item
+v is not white at time dw. Then, since w is a descendant of u, by Theorem 3.11, $du < dw < fw < fu$. Thus, since $v$ is not white at dw, it have been discovered between $du$ and $dw$. Therefore, we have that $du < dv < dw < fw < fu$, or in particular, $du < dv < fu$. Thus, by lemma 2.12, $du < dv < fv < fu$, and by Theorem 3.11, this implies that $v$ is a descendant of $u$ in the DFS forest, which was what we wanted to show.
+\end{enumerate}
+\end{proof}
+\begin{theorem}[White Path Theorem]
+When the algorithm finishes, v is a descendant of u in the DFS forest iff at time du, there is a path consisting of white vertices from u to v in the original graph.
+\end{theorem}
+\begin{proof}
+Follows from Lemma 4.10 and Lemma 4.5.
 \end{proof}
 \end{document}
