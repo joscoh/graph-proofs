@@ -5,7 +5,7 @@ Require Export Path.
 Require Import Coq.Lists.List.
 (*TODO: maybe extend graph instead of providing function*)
 
-Module Type Forest(O: UsualOrderedType)(S Sg: FSetInterface.Sfun O)(G: Graph O Sg).
+Module Type Forest(O: UsualOrderedType)(Sg: FSetInterface.Sfun O)(G: Graph O Sg).
 
   Module P := (Path.PathTheories O Sg G).
 

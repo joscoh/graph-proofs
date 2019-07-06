@@ -1,6 +1,7 @@
 Require Import Coq.Lists.List.
 Require Import Coq.Lists.SetoidList.
 Require Import Coq.Bool.Bool.
+Require Import Omega.
 
 
 Lemma In_InA_equiv: forall A (x : A) l,

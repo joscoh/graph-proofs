@@ -4,4 +4,5 @@ Graph.v
 AdjacencyMap.v
 Path.v
 Forest.v
+DFSSpec.v
 DFS.v
