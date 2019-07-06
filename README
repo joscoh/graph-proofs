@@ -1,1 +1,0 @@
-This repo contains proofs about graph algorithms in Coq. For the moment, I am attempting to prove the correctness of a version of DFS heavily inspired by the one in CLRS.
