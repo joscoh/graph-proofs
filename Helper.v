@@ -2,6 +2,7 @@ Require Import Coq.Lists.List.
 Require Import Coq.Lists.SetoidList.
 Require Import Coq.Bool.Bool.
 Require Import Omega.
+Require Import Coq.Lists.ListDec.
 
 
 Lemma In_InA_equiv: forall A (x : A) l,
@@ -72,3 +73,56 @@ Lemma contrapositive: forall (P Q: Prop),
 Proof.
   intros. intro. apply H in H1. contradiction.
 Qed.
+
+Lemma in_split_app_fst: forall (A: Type) (l: list A) (x: A),
+  (forall x y : A, {x = y} + {x <> y}) ->
+  In x l ->
+  exists l1 l2, l = l1 ++ (x :: l2) /\ forall y, In y l1 -> y <> x.
+Proof.
+  intros. induction l.
+  - inversion H.
+  - destruct (X x a). subst. exists nil. exists l. split. reflexivity. intros. inversion H0.
+    simpl in H. destruct H. subst. contradiction.  apply IHl in H. destruct_all.
+    exists (a :: x0). exists x1. split. rewrite H. reflexivity. intros. intro. subst.
+    simpl in H1. destruct H1. subst. contradiction. apply H0 in H. contradiction.
+Qed.
+
+Lemma in_split_app_snd: forall (A: Type) (l: list A) (x: A),
+  (forall x y : A, {x = y} + {x <> y}) ->
+  In x l ->
+  exists l1 l2, l = l1 ++ (x :: l2) /\ forall y, In y l2 -> y <> x.
+Proof.
+  intros. induction l.
+  - inversion H.
+  - simpl in *. destruct H. subst. destruct (in_dec X x l).
+    apply IHl in i. destruct_all. exists (x :: x0). exists x1. split.
+    simpl. rewrite H. reflexivity. apply H0.
+    exists nil. exists l. split. reflexivity. intros. intro. subst.
+    contradiction. apply IHl in H. destruct_all. exists (a :: x0). exists x1.
+    split. rewrite H. simpl. reflexivity. apply H0.
+Qed. 
+
+Lemma no_no_dup: forall (A: Type) (l: list A),
+  (forall x y : A, {x = y} + {x <> y}) ->
+  ~(NoDup l) <-> (exists w l1 l2 l3, l = l1 ++ w :: l2 ++ w :: l3).
+Proof.
+  intros. split; intros.
+  - induction l.
+    + assert (@NoDup A nil). constructor. contradiction.
+    + destruct (NoDup_dec X l).
+      * assert (In a l). destruct (In_dec X a l). apply i.
+        assert (NoDup (a :: l)). constructor. apply n0. apply n. contradiction.
+        apply in_split_app_fst in H0. destruct_all. exists a. exists nil. exists x. exists x0.
+        rewrite H0. reflexivity. apply X.
+      * apply IHl in n. destruct_all. exists x. exists (a :: x0). exists x1. exists x2. rewrite H0.
+        reflexivity.
+  -  intro. destruct_all.  subst. induction x0; simpl in *.
+    + rewrite NoDup_cons_iff in H0. destruct_all. apply H.
+    solve_in.
+    + simpl in H0. rewrite NoDup_cons_iff in H0. destruct_all. apply IHx0. apply H0.
+Qed.
+
+
+
+
+
