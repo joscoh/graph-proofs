@@ -389,7 +389,14 @@ Qed.
       rewrite <- desc_list_iff_desc. exists l. apply H1.
       eapply IHl. apply H0. apply H1.
   Qed. 
-    
+
+Parameter child_neq: forall f u v,
+  is_child f u v = true -> u <> v.
+(*TODO:see which is best: prove acyclicty of graph and then relate to path, prove directly in impl, etc*)
+Parameter desc_neq: forall f u v,
+  desc f u v ->
+  u <> v.
+
     
 (*might need equal lemma to ensure it is acyclic but we 
 will see*)

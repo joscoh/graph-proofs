@@ -126,12 +126,20 @@ Qed.
   Definition cyclic (g: graph) := exists v, path g v v.
 
   (*There is a cycle that does not consist only of a single vertex*)
-  Definition cyclic_no_self_loop (g: graph) := exists v l, (exists x, x <> v /\ In x l)
+  Definition nontrivial_cyclic (g: graph) := exists v l, (exists x, x <> v /\ In x l)
    /\ path_list_rev g v v l = true.
 
   Definition acyclic (g: graph):= ~ exists v, path g v v.
 
   Definition acyclic' (g: graph) := forall v, ~path g v v.
+
+  Lemma acylic_no_nontrivial: forall g,
+    acyclic g ->
+    ~nontrivial_cyclic g.
+  Proof.
+   intros. intro.  unfold acyclic in H. unfold nontrivial_cyclic in H0. destruct_all.
+    apply H. exists x. rewrite path_path_list_rev. exists x0. apply H1.
+  Qed.
 
   Lemma acyclic_equiv: forall g,
     acyclic' g <-> acyclic g.

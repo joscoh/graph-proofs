@@ -5,4 +5,5 @@ AdjacencyMap.v
 Path.v
 Forest.v
 DFSSpec.v
+DerivedProofs.v
 DFS.v
