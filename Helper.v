@@ -122,6 +122,18 @@ Proof.
     + simpl in H0. rewrite NoDup_cons_iff in H0. destruct_all. apply IHx0. apply H0.
 Qed.
 
+Lemma StronglySorted_NoDup: forall (A: Type) (P: A -> A -> Prop) (l: list A),
+  (forall a, ~P a a) ->
+  StronglySorted P l ->
+  NoDup l.
+Proof.
+  intros. induction l. 
+  - constructor.
+  - inversion H0; subst. constructor. intro. 
+    rewrite Forall_forall in H4. apply H4 in H1. apply H in H1. destruct H1.
+    apply IHl. apply H3.
+Qed.
+
 
 
 

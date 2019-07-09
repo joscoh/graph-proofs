@@ -1964,7 +1964,103 @@ Proof.
     rewrite H2. intro. inversion H4.
 Qed.
 
-End DFTimes.
+Lemma start_first_on_stack: forall s g v,
+  G.contains_vertex g v = true ->
+  dfs_step (start_state g (Some v)) s ->
+  M.find v (get_d_times s) = Some (1).
+Proof.
+  intros. assert (valid_dfs_state s g (Some v)). eapply step. apply start. apply H0.
+   unfold start_state in H0. rewrite H in H0. inversion H0; subst; simpl in *.
+  - assert (tl = nil). eapply root_nil. apply H1. reflexivity. subst.
+    apply G.set_of_graph_1 in H. apply S.mem_1 in H. rewrite H in H12.
+    simpl in H12. inversion H12; subst. apply P.F.add_eq_o. reflexivity.
+  - apply G.set_of_graph_1 in H. apply S.mem_1 in H. rewrite H in H12. simpl in H12.
+    inversion H12.
+  - apply G.set_of_graph_1 in H. apply S.mem_1 in H. rewrite H in H13. simpl in H13.
+    inversion H13; subst. rewrite H in H11. inversion H11.
+Qed.
+
+Lemma start_first_on_stack_multi: forall s g v s',
+  G.contains_vertex g v = true ->
+  dfs_step (start_state g (Some v)) s ->
+  dfs_multi s s' ->
+  M.find v (get_d_times s') = Some (1).
+Proof.
+  intros. eapply discovery_time_constant. eapply step. apply start. apply H0. 
+  eapply start_first_on_stack. apply H. apply H0. apply H1.
+Qed.
+
+Lemma valid_start_or_multi: forall s g o,
+  valid_dfs_state s g o ->
+  s = start_state g o \/ (forall s', dfs_step (start_state g o) s' -> dfs_multi s' s).
+Proof.
+  intros. induction H.
+  - left. reflexivity.
+  - destruct IHvalid_dfs_state.
+    + subst. right. intros.
+      assert (s' = s2). eapply dfs_step_deterministic. apply H1. apply H0. subst.
+      apply multi_refl.
+    + right. intros. eapply multi_trans. apply H1. apply H2. apply multi_R. apply H0.
+Qed. 
+
+Lemma state_after_start: forall g o v,
+  G.contains_vertex g v = true ->
+  exists s, dfs_step (start_state g o) s.
+Proof.
+  intros. destruct (done (start_state g o)) eqn : ?.
+  - unfold done in Heqb. unfold start_state in Heqb. simplify.
+    destruct o; try(destruct (G.contains_vertex g v0)); simpl in *;
+    apply G.set_of_graph_1 in H; apply S.mem_1 in H; solve_empty.
+  - exists (next_state (start_state g o)). eapply step_next_state. apply start.
+    apply Heqb.
+Qed.
+
+Lemma start_time_one: forall s g v n,
+  valid_dfs_state s g (Some v) ->
+  G.contains_vertex g v = true ->
+  M.find v (get_d_times s) = Some n ->
+  n = 1.
+Proof.
+  intros. apply valid_start_or_multi in H.
+  - destruct H. subst. simpl in *. rewrite P.F.empty_o in H1. inversion H1.
+    pose proof (state_after_start g (Some v) v H0). destruct H2. assert (H3:=H2). apply H in H2.
+    assert (M.find v (get_d_times x) = Some 1). eapply start_first_on_stack.
+    apply H0. apply H3. eapply discovery_time_constant in H4. rewrite H4 in H1. inversion H1; subst.
+    reflexivity. eapply step. apply start. apply H3. apply H2. 
+Qed.
+
+Lemma no_start_time_zero: forall s g o v n,
+  valid_dfs_state s g o ->
+  M.find v (get_d_times s) = Some n ->
+  n <> 0.
+Proof.
+  intros. induction H; subst; simpl in *.
+  - rewrite P.F.empty_o in H0. inversion H0.
+  - inversion H1; subst; simpl in *.
+    + destruct (O.eq_dec v x). unfold O.eq in e. subst. rewrite P.F.add_eq_o in H0. inversion H0; subst. omega.
+      reflexivity. rewrite P.F.add_neq_o in H0. apply IHvalid_dfs_state. apply H0. auto.
+    + destruct (O.eq_dec v x). unfold O.eq in e. subst. rewrite P.F.add_eq_o in H0. inversion H0; subst. omega.
+      reflexivity. rewrite P.F.add_neq_o in H0. apply IHvalid_dfs_state. apply H0. auto.
+    + apply IHvalid_dfs_state. apply H0.
+Qed.
+
+Lemma first_vertex_smallest: forall s g v u n m,
+  valid_dfs_state s g (Some v) ->
+  G.contains_vertex g v = true ->
+  u <> v ->
+  M.find v (get_d_times s) = Some n ->
+  M.find u (get_d_times s ) = Some m ->
+  n < m.
+Proof.
+  intros.  assert (n = 1). eapply start_time_one. apply H. apply H0. apply H2.
+  subst. assert (m = 0 \/ m =1 \/ 1 < m) by omega.
+  destruct H4; subst.
+  + eapply no_start_time_zero in H3. contradiction. apply H.
+  + destruct H4; subst. assert (u = v). eapply d_times_unique. apply H. apply H2. apply H3.
+    reflexivity. subst. contradiction. apply H4.
+Qed.
+
+End DFTimes. 
 
 (** ** General properties of the DFS forest **)
 Section ForestGeneral.
@@ -3453,40 +3549,70 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
 
   Module P := Pa.
 
-  Definition end_state (g: graph) := dfs_exec (start_state g None) g None (start g None).
+  Definition times_function := G.vertex -> nat.
 
-  Definition dfs (g: graph) : F.forest := 
-    get_forest (proj1_sig (end_state g)).
+  Definition end_state (g: G.graph) o := dfs_exec (start_state g o) g o (start g o).
 
-  Definition state (g: graph) := {s : DFS.state | valid_dfs_state s g None} .
+  Definition dfs_forest o (g: G.graph) : F.forest := 
+    get_forest (proj1_sig (end_state g o)).
 
-  Definition f_time (g: graph) (v: vertex) : nat :=
-    match M.find v (get_f_times (proj1_sig (end_state g))) with
+  Definition state o (g: graph) := {s : DFS.state | valid_dfs_state s g o} .
+
+  Definition f_time o (g: graph) (v: vertex) : nat :=
+    match M.find v (get_f_times (proj1_sig (end_state g o))) with
     | Some n => n
     | None => 0
     end.
 
-  Definition d_time (g: graph) (v: vertex) : nat :=
-    match M.find v (get_d_times (proj1_sig (end_state g))) with
+  Definition d_time o (g: graph) (v: vertex) : nat :=
+    match M.find v (get_d_times (proj1_sig (end_state g o))) with
     | Some n => n
     | None => 0
     end.
 
+  Definition dfs : option G.vertex -> G.graph -> (F.forest *  times_function * times_function)
+   := fun  (o: option vertex)(g: G.graph) => ((dfs_forest o g) , (d_time o g) , (f_time o g)).
 
-  Definition time_of_state (g: graph) (s: state g) := get_time (proj1_sig s).
+  Definition time_of_state o (g: graph) (s: state o g) := get_time (proj1_sig s).
 
-  Definition white g (s: state g)(v: G.vertex) : bool :=
-    ltb (time_of_state g s) (d_time g v).
+  Lemma discovery_exists: forall o g v,
+    G.contains_vertex g v = true ->
+    exists (s: state o g), time_of_state o g s = d_time o g v.
+  Proof.
+    intros. unfold d_time. unfold time_of_state. destruct (end_state g o).
+    destruct_all; simpl in *. 
+    assert (valid_dfs_state x g o). eapply multistep_preserves_valid. apply start. apply d.
+    pose proof (all_times_when_done x g o v H0 e H). destruct_all.
+    pose proof (discovery_time_means_discovered x g o v x1 H0 H1). destruct_all.
+    exists (exist _ x2 H5). simpl. rewrite H1. symmetry. apply H4.
+  Qed.
 
-  Definition gray g (s: state g)(v: G.vertex): bool :=
-    ltb (time_of_state g s) (f_time g v) && leb (d_time g v) (time_of_state g s).
+  (*Lemma finish_exists: forall o g v,
+    G.contains_vertex g v = true ->
+    exists (s: state o g), time_of_state o g s = d_time o g v.
+  Proof.
+    intros. unfold f_time. unfold time_of_state. destruct (end_state g o).
+    destruct_all; simpl in *. 
+    assert (valid_dfs_state x g o). eapply multistep_preserves_valid. apply start. apply d.
+    pose proof (all_times_when_done x g o v H0 e H). destruct_all.
+    pose proof (finish_time_means_finished x g o v x0 H0 H2). destruct_all.
+    exists (exist _ x2 H5). simpl. rewrite H2. symmetry. apply H4.
+  Qed.*)
 
-  Definition black g (s:state g)(v: G.vertex) : bool :=
-    leb (f_time g v) (time_of_state g s).
 
 
-  Lemma state_time_unique: forall g (s s': state g),
-    time_of_state g s = time_of_state g s' <-> s = s'.
+  Definition white o g (s: state o g)(v: G.vertex) : bool :=
+    ltb (time_of_state o g s) (d_time o g v).
+
+  Definition gray o g (s: state o g)(v: G.vertex): bool :=
+    ltb (time_of_state o g s) (f_time o g v) && leb (d_time o g v) (time_of_state o g s).
+
+  Definition black o g (s:state o g)(v: G.vertex) : bool :=
+    leb (f_time o g v) (time_of_state o g s).
+
+
+  Lemma state_time_unique: forall g o (s s': state o g),
+    time_of_state o g s = time_of_state o g s' <-> s = s'.
   Proof. 
     intros. unfold state in *. destruct s. destruct s'. simpl in *. unfold time_of_state; simpl in *.
     split; intros. eapply times_unique in H. subst. apply ProofIrrelevance.ProofIrrelevanceTheory.subset_eq_compat.
@@ -3495,115 +3621,116 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
   Qed.
  
 
-  Lemma d_time_equiv: forall g u,
+  Lemma d_time_equiv: forall o g u,
     G.contains_vertex g u = true ->
-    M.find u (get_d_times (proj1_sig (end_state g))) = Some (d_time g u).
+    M.find u (get_d_times (proj1_sig (end_state g o))) = Some (d_time o g u).
   Proof.
     intros.
-    unfold d_time. unfold end_state; simpl in *. 
-    remember (dfs_exec (start_state g None) g None (start g None)) as H1. destruct H1. simpl.
+    unfold d_time. destruct (end_state g o); destruct_all; simpl in *. 
     destruct (M.find u (get_d_times x)) eqn : ?.
     - reflexivity.
-    - assert (valid_dfs_state x g None). destruct a. eapply multistep_preserves_valid.
-      apply start. apply d. destruct a. pose proof (all_times_when_done _ _ _ _ H0 e H).
-      destruct_all. rewrite H1 in Heqo. inversion Heqo.
+    - assert (valid_dfs_state x g o). eapply multistep_preserves_valid.
+      apply start. apply d.  pose proof (all_times_when_done _ _ _ _ H0 e H).
+      destruct_all. rewrite H1 in Heqo0. inversion Heqo0.
   Qed.
 
-  Lemma f_time_equiv: forall g u,
+  Lemma f_time_equiv: forall o g u,
     G.contains_vertex g u = true ->
-    M.find u (get_f_times (proj1_sig (end_state g))) = Some (f_time g u).
+    M.find u (get_f_times (proj1_sig (end_state g o))) = Some (f_time o g u).
   Proof.
     intros.
-    unfold f_time. unfold end_state; simpl in *. 
-    remember (dfs_exec (start_state g None) g None (start g None)) as H1. destruct H1. simpl.
+    unfold f_time. destruct (end_state g o); destruct_all; simpl in *. 
     destruct (M.find u (get_f_times x)) eqn : ?.
     - reflexivity.
-    - assert (valid_dfs_state x g None). destruct a. eapply multistep_preserves_valid.
-      apply start. apply d. destruct a. pose proof (all_times_when_done _ _ _ _ H0 e H).
-      destruct_all. rewrite H2 in Heqo. inversion Heqo.
+    - assert (valid_dfs_state x g o). eapply multistep_preserves_valid.
+      apply start. apply d.  pose proof (all_times_when_done _ _ _ _ H0 e H).
+      destruct_all. rewrite H2 in Heqo0. inversion Heqo0.
   Qed.
 
   (* Some needed results about uniqueness of times *)
-  Lemma d_times_unique: forall g u v
-    (Hu: G.contains_vertex g u = true)
-    (Hv: G.contains_vertex g v = true),
-    d_time g u = d_time g v <-> u = v.
+  Lemma d_times_unique: forall o g u v,
+    G.contains_vertex g u = true ->
+    G.contains_vertex g v = true ->
+    d_time o g u = d_time o g v <-> u = v.
   Proof.
-    split; intros. pose proof (d_time_equiv g u). pose proof (d_time_equiv g v).
-    remember end_state as A. destruct A. simpl in *. destruct_all.
-    apply H0 in Hu. apply H1 in Hv. eapply d_times_unique.
-    eapply multistep_preserves_valid. apply start. apply H2. apply Hv. apply Hu.
-    inversion H; subst. reflexivity. subst. reflexivity.
+    split; intros. pose proof (d_time_equiv o g u H). pose proof (d_time_equiv o g v H0).
+    destruct (end_state g o); destruct_all; simpl in *. eapply d_times_unique.
+    eapply multistep_preserves_valid. apply start. apply d. apply H3. apply H2.
+    omega. subst. reflexivity.
   Qed.
 
-  Lemma f_times_unique: forall g u v
-    (Hu: G.contains_vertex g u = true)
-    (Hv: G.contains_vertex g v = true),
-    f_time g u = f_time g v <-> u = v.
+  Lemma f_times_unique: forall o g u v,
+    G.contains_vertex g u = true ->
+    G.contains_vertex g v = true ->
+    f_time o g u = f_time o g v <-> u = v.
   Proof.
-    split; intros. pose proof (f_time_equiv g u). pose proof (f_time_equiv g v).
-    remember end_state as A. destruct A. simpl in *. destruct_all.
-    apply H0 in Hu. apply H1 in Hv. eapply f_times_unique.
-    eapply multistep_preserves_valid. apply start. apply H2. apply Hv. apply Hu.
-    inversion H; subst. reflexivity. subst. reflexivity.
+    split; intros. pose proof (f_time_equiv o g u H). pose proof (f_time_equiv o g v H0).
+    destruct (end_state g o); destruct_all; simpl in *. eapply f_times_unique.
+    eapply multistep_preserves_valid. apply start. apply d. apply H3. apply H2.
+    omega. subst. reflexivity.
   Qed.
 
   Lemma all_times_unique:
-    forall g u v
-    (Hu: G.contains_vertex g u = true)
-    (Hv: G.contains_vertex g v = true),
-    f_time g u <> d_time g v.
+    forall o g u v,
+    G.contains_vertex g u = true ->
+    G.contains_vertex g v = true ->
+    f_time o g u <> d_time o g v.
   Proof.
     intros. intro. unfold f_time in *. unfold d_time in *. 
-    destruct_all. eapply (f_time_equiv g u) in Hu. apply (d_time_equiv g v) in Hv.
-    remember end_state as e. destruct e; simpl in *. rewrite Hu in H.
-    rewrite Hv in H. eapply all_times_unique. eapply multistep_preserves_valid.
-    apply start. apply a. apply Hv. inversion H; subst. apply Hu.
+    destruct_all. eapply (f_time_equiv o g u) in H. apply (d_time_equiv o g v) in H0.
+    remember end_state as e. destruct e; simpl in *. rewrite H in H1.
+    rewrite H0 in H1. subst. rewrite H1 in H. eapply all_times_unique. eapply multistep_preserves_valid.
+    apply start. apply a. apply H0. apply H. 
   Qed. 
 
+
+
   (*Major Results*)
-  Theorem parentheses_theorem: forall g u v,
+  Theorem parentheses_theorem: forall o g u v,
     G.contains_vertex g u = true ->
     G.contains_vertex g v = true ->
     u <> v ->
-    (d_time g u < d_time g v /\ d_time g v < f_time g v /\ f_time g v < f_time g u) \/
-    (d_time g v < d_time g u /\ d_time g u < f_time g u /\ f_time g u < f_time g v) \/
-    (d_time g u < f_time g u /\ f_time g u < d_time g v /\ d_time g v < f_time g v) \/
-    (d_time g v < f_time g v /\ f_time g v < d_time g u /\ d_time g u < f_time g u).
+    (d_time o g u < d_time o g v /\ d_time o g v < f_time o g v /\ f_time o g v < f_time o g u) \/
+    (d_time o g v < d_time o g u /\ d_time o g u < f_time o g u /\ f_time o g u < f_time o g v) \/
+    (d_time o g u < f_time o g u /\ f_time o g u < d_time o g v /\ d_time o g v < f_time o g v) \/
+    (d_time o g v < f_time o g v /\ f_time o g v < d_time o g u /\ d_time o g u < f_time o g u).
   Proof.
-    intros. unfold d_time. unfold f_time. remember (end_state g) as e. destruct e. simpl in *.
-    destruct_all. assert (valid_dfs_state x g None). eapply multistep_preserves_valid.
+    intros. unfold d_time. unfold f_time. destruct (end_state g o); destruct_all; simpl in *. 
+    assert (valid_dfs_state x g o). eapply multistep_preserves_valid.
     apply start. apply d. pose proof (all_times_when_done _ _ _ _ H2 e H).
     pose proof (all_times_when_done _ _ _ _ H2 e H0). destruct_all. rewrite H3.
     rewrite H4. rewrite H5. rewrite H6. pose proof (parentheses_theorem
     _ _ _ _ _ _ _ _ _ H2 H1 H3 H4 H6 H5). omega.
   Qed.
   
-  Theorem descendant_iff_interval: forall g u v,
+
+  Lemma descendant_iff_interval: forall o g u v,
     G.contains_vertex g u = true ->
     G.contains_vertex g v = true ->
-    F.desc (dfs g) u v <-> (d_time g u < d_time g v /\ d_time g v < f_time g v /\ f_time g v < f_time g u).
+    F.desc (dfs_forest o g) u v <->
+     (d_time o g u < d_time o g v /\ d_time o g v < f_time o g v /\ f_time o g v < f_time o g u).
   Proof.
-    intros. unfold dfs. unfold d_time. unfold f_time. destruct (end_state g). simpl in *.
-    destruct_all. assert (valid_dfs_state x g None). eapply multistep_preserves_valid.
+    intros. unfold dfs_forest. unfold d_time. unfold f_time. destruct (end_state g o). simpl in *.
+    destruct_all. assert (valid_dfs_state x g o). eapply multistep_preserves_valid.
     apply start. apply H1. pose proof (all_times_when_done _ _ _ _ H3 H2 H).
     pose proof (all_times_when_done _ _ _ _ H3 H2 H0). destruct_all. rewrite H4.
-    rewrite H5. rewrite H6. rewrite H7. eapply desc_iff_time_interval; eassumption.
+    rewrite H5. rewrite H6. rewrite H7. eapply desc_iff_time_interval; try(eassumption).
   Qed.
+
 
   (*Proves that the version of white in the interface (referencing only finish times) is equivalent to
     the other set based definition TODO: do this for the rest of the colors*)
-  Lemma white_equiv: forall g (s: state g) v,
+  Lemma white_equiv: forall o g (s: state o g) v,
     G.contains_vertex g v = true ->
-    white g s v = true <-> DFS.white (proj1_sig s) v = true.
+    white o g s v = true <-> DFS.white (proj1_sig s) v = true.
   Proof.
-    intros. assert (A:= H). apply d_time_equiv in A. split; intros.
+    intros. assert (A:= H). apply (d_time_equiv o) in A. split; intros.
     - unfold white in H0. unfold time_of_state in H0. unfold d_time in H0.
-      destruct s; simpl in *. destruct end_state; simpl in *. destruct_all.
+      destruct s; simpl in *. destruct (end_state g o); simpl in *. destruct_all.
       rewrite A in H0. rewrite Nat.ltb_lt in H0. unfold DFS.white.
       assert (S.mem v (get_remain_d x) = true). destruct (S.mem v (get_remain_d x)) eqn : ?.
       reflexivity. rewrite v_discovered_iff_not_remain in Heqb. destruct Heqb.
-      assert (dfs_multi x x0). assert (B:= v0). assert (valid_dfs_state x0 g None).
+      assert (dfs_multi x x0). assert (B:= v0). assert (valid_dfs_state x0 g o).
       eapply multistep_preserves_valid. apply start. apply H1.
       assert (C:= H4). apply valid_begins_with_start in H4. apply valid_begins_with_start in v0.
       pose proof (multi_from_start _ _ _ v0 H4). destruct H5. 
@@ -3613,9 +3740,9 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
       assert (C:= B). eapply d_times_leq_current_time in B.  omega.
       apply v0. apply v0. apply H4. apply v0. apply H.
       rewrite H3. eapply not_f_if_not_d in H3. rewrite H3. reflexivity. apply v0.
-    - unfold white. destruct s; simpl in *. destruct (end_state); simpl in *. unfold time_of_state. simpl.
-      destruct_all. assert (valid_dfs_state x0 g None). eapply multistep_preserves_valid. apply start.
-      apply H1. unfold DFS.white in H0. destruct (get_time x <? d_time g v) eqn : ?.
+    - unfold white. destruct s; simpl in *. destruct (end_state g o); simpl in *. unfold time_of_state. simpl.
+      destruct_all. assert (valid_dfs_state x0 g o). eapply multistep_preserves_valid. apply start.
+      apply H1. unfold DFS.white in H0. destruct (get_time x <? d_time o g v) eqn : ?.
       reflexivity. rewrite Nat.ltb_antisym in Heqb. simplify.
       assert (M.find v (get_d_times x) = None). pose proof (v_discovered_iff_not_remain
       _ _ _ _ v0 H). destruct H0. apply contrapositive in H6. 
@@ -3634,11 +3761,11 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
       apply H11.
   Qed.
 
-  Theorem white_path_equiv: forall u v l g s,
-    Pa.path_list_ind g u v (fun x => white g s x) l <-> Pa.path_list_ind g u v (fun x => DFS.white (proj1_sig s) x) l.
+  Theorem white_path_equiv: forall o u v l g s,
+    Pa.path_list_ind g u v (fun x => white o g s x) l <-> Pa.path_list_ind g u v (fun x => DFS.white (proj1_sig s) x) l.
   Proof.
     intros. split; intros. 
-    - remember (fun x : G.vertex => white g s x) as f.  induction H; subst.
+    - remember (fun x : G.vertex => white o g s x) as f.  induction H; subst.
       + constructor. apply H. rewrite <- white_equiv. apply H0. eapply G.contains_edge_2. apply H.
       + constructor. apply IHpath_list_ind. reflexivity. rewrite <- white_equiv. apply H0. 
         eapply G.contains_edge_2. apply H1. apply H1.
@@ -3648,15 +3775,15 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
         eapply G.contains_edge_2. apply H1. apply H1.
   Qed.
 
-  Theorem white_path_theorem: forall g u v,
+  Theorem white_path_theorem: forall o g u v,
     G.contains_vertex g u = true ->
-    F.desc (dfs g) u v <-> (forall s, time_of_state g s = d_time g u ->
-    exists l, P.path_list_ind g u v (fun x => white g s x) l).
+    F.desc (dfs_forest o g) u v <-> (forall s, time_of_state o g s = d_time o g u ->
+    exists l, P.path_list_ind g u v (fun x => white o g s x) l).
   Proof.
-    intros. setoid_rewrite white_path_equiv. unfold dfs. unfold d_time. destruct (end_state g); simpl in *.
-    destruct_all. assert (valid_dfs_state x g None). eapply multistep_preserves_valid.
+    intros. setoid_rewrite white_path_equiv. unfold dfs_forest. unfold d_time. destruct (end_state g o); simpl in *.
+    destruct_all. assert (valid_dfs_state x g o). eapply multistep_preserves_valid.
     apply start. apply H0. unfold time_of_state. simpl. split; intros. destruct s; simpl in *.
-    - apply d_time_equiv in H.
+    - apply (d_time_equiv o) in H.
       destruct (end_state g); simpl in *. destruct_all. assert (x1 = x). eapply done_unique.
       eapply multistep_preserves_valid. apply start. apply H5. apply H2. apply H6. apply H1.
       subst. rewrite H in H4. pose proof (discovery_time_means_discovered _ _ _ _ _ H2 H).
@@ -3664,31 +3791,47 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
       pose proof (DFS.white_path_theorem  _ _ _ _ v _ H2 H9 H6 H10). destruct H11.
       assert (x1 = x0). eapply times_unique. apply H9. apply v0. rewrite <- H8. rewrite H4. reflexivity.
       subst. apply H12. apply H3. 
-    - apply d_time_equiv in H. destruct (end_state g); simpl in *. destruct_all.
+    - apply (d_time_equiv o) in H. destruct (end_state g o); simpl in *. destruct_all.
       assert (x = x0). eapply done_unique. apply H2. eapply multistep_preserves_valid. apply start. apply H4.
       apply H1. apply H5. subst.  rewrite H in H3.  
       pose proof (discovery_time_means_discovered _ _ _ _ _ H2 H). destruct_all.
       eapply DFS.white_path_theorem. apply H2. apply H8. apply H1. rewrite H7 in H9. apply H9.
-      specialize (H3 (exist (fun s => valid_dfs_state s g None) x H8)).
+      specialize (H3 (exist (fun s => valid_dfs_state s g o) x H8)).
       simpl in H3. apply H3. rewrite H7. reflexivity.
   Qed.
 
   (* Basic results about vertices and edges *)
-  Lemma same_vertices: forall g v,
-    G.contains_vertex g v = true <-> F.contains_vertex (dfs g) v = true.
+  Lemma same_vertices: forall o g v,
+    G.contains_vertex g v = true <-> F.contains_vertex (dfs_forest o g) v = true.
   Proof.
-    intros. unfold dfs. destruct (end_state g); simpl in *; destruct_all.
+    intros. unfold dfs_forest. destruct (end_state g o); simpl in *; destruct_all.
     eapply same_vertices. eapply multistep_preserves_valid. apply start. apply H. apply H0.
   Qed.
 
-  Lemma same_edges: forall g u v,
-    F.is_child (dfs g) u v = true -> G.contains_edge g u v = true.
+  Lemma same_edges: forall o g u v,
+    F.is_child (dfs_forest o g) u v = true -> G.contains_edge g u v = true.
   Proof.
-    intros. unfold dfs in *.  destruct (end_state g); simpl in *; destruct_all. 
+    intros. unfold dfs_forest in *.  destruct (end_state g o); simpl in *; destruct_all. 
     eapply edges_in_forest_in_graph. eapply multistep_preserves_valid. apply start.
     apply H0. apply H.
   Qed. 
 
-End DFSBaseImpl.
+  Lemma start_vertex: forall g v u,
+    G.contains_vertex g v = true ->
+    G.contains_vertex g u = true ->
+    v <> u ->
+    d_time (Some v) g v < d_time (Some v) g u.
+  Proof.
+    intros. unfold d_time. destruct (end_state g (Some v)); destruct_all; simpl in *.
+    assert (valid_dfs_state x g (Some v)). eapply multistep_preserves_valid. apply start.
+    apply d.
+    pose proof (all_times_when_done x g (Some v) u H2 e H0).
+    pose proof (all_times_when_done x g (Some v) v H2 e H). destruct_all.
+    rewrite H3. rewrite H4. eapply first_vertex_smallest. apply H2. apply H.
+    assert (u <> v) by auto. apply H7. apply H4. apply H3.
+  Qed.
+    
+
+End DFSBaseImpl. 
 
 End DFS.

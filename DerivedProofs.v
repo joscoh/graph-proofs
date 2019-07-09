@@ -185,7 +185,7 @@ Lemma desc_iff_gray_when_discovered: forall (g : G.graph) o u v,
   G.contains_vertex g v = true ->
   G.contains_vertex g u = true ->
   u <> v ->
-  F.desc (D.dfs_forest o g) u v <-> (forall s, D.time_of_state g s = D.d_time o g v -> D.gray o g s u = true).
+  F.desc (D.dfs_forest o g) u v <-> (forall s, D.time_of_state o g s = D.d_time o g v -> D.gray o g s u = true).
 Proof.
   intros. split; intros.
   - apply D.descendant_iff_interval in H2. destruct_all.
@@ -203,7 +203,7 @@ Proof.
 Qed.
 
 (*Alternative definition of back edge: an edge (u, v) in g such that v is gray when u is discovered*)
-Definition back_edge' g u v o := exists s, u <> v /\ D.time_of_state g s = D.d_time o g u /\ G.contains_edge g u v = true
+Definition back_edge' g u v o := exists s, u <> v /\ D.time_of_state o g s = D.d_time o g u /\ G.contains_edge g u v = true
    /\ D.gray o g s v = true.
 
 (*The two definitions are equivalent*)
@@ -266,6 +266,7 @@ Qed.
   graph is in the list*)
 Definition topological_sort (l: list G.vertex) (g: G.graph):=
   (forall v, G.contains_vertex g v = true <-> In v l) /\ 
+  NoDup l /\
   (forall l1 l2 l3 u v, l = l1 ++ u :: l2 ++ v :: l3 -> G.contains_edge g v u = false).
 
 (*The resulting list is sorted in reverse order of finish time*)
@@ -299,7 +300,7 @@ Proof.
     intro. subst. unfold P.acyclic in H4. apply H4. exists v. 
     constructor. apply H0. split. apply H2. split. apply H0. apply H3.
     unfold D.black in H3. rewrite Nat.leb_le in H3. 
-    assert ((D.f_time o g v = D.time_of_state g x) \/ (D.f_time o g v < D.time_of_state g x)) by omega.
+    assert ((D.f_time o g v = D.time_of_state o g x) \/ (D.f_time o g v < D.time_of_state o g x)) by omega.
     assert (G.contains_vertex g v = true). eapply G.contains_edge_2. apply H0.
     destruct H4. pose proof (D.all_times_unique o g v u H5 H1). omega. assert (u <> v).
     intro. subst. unfold P.acyclic in H. apply H. exists v. constructor. apply H0.
@@ -315,7 +316,8 @@ Lemma topological_sort_correct: forall l g o,
   StronglySorted (rev_f_time o g) l ->
   topological_sort l g.
 Proof.
-  intros. unfold topological_sort. split. apply H0.
+  intros. unfold topological_sort. split. apply H0. split. apply (StronglySorted_NoDup _ (rev_f_time o g)).
+  intros. intro. unfold rev_f_time in H2. omega. apply H1.
   intros. subst. apply sort_app in H1. destruct H1. inversion H2; subst.
   rewrite Forall_forall in H6. destruct (G.contains_edge g v u) eqn : ?.
   specialize (H6 v). assert (rev_f_time o g u v). apply H6. solve_in.
