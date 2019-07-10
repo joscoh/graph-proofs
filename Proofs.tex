@@ -383,4 +383,108 @@ When the algorithm finishes, v is a descendant of u in the DFS forest iff at tim
 \begin{proof}
 Follows from Lemma 4.10 and Lemma 4.5.
 \end{proof}
+\section{DFS Specification}
+The following defines a set of properties that define a DFS algorithm that computes start and finish times. The above DFS algorithm satisfies this specification, but separating out the properties from the implementation means that we can prove the correctness of several applications of DFS no matter underlying implementation is used.
+\begin{enumerate}
+\item
+There is a function dfs that takes in a vertex option (an optional starting vertex) and a graph and produces a forest, a function from vertices to nats (discovery times), and a function from vertices to nats (finish times).
+\item
+There is a type called state parameterized by a graph and a vertex option. It is used in the function time\_of\_state, which takes in a state and produces a nat. This allows us to say "at the time when vertex v was discovered" in the white path theorem.
+\item
+For any vertex, if it is discovered at time $n$, then there is a state with time $n$.
+\item
+We define a white vertex in a given state to be one where the state's time is less than the vertex's discovery time, gray for a state time in between the discovery and finish times, and black after the finish time.
+\item
+Discovery and finish times are unique among vertices, and no vertex is discovered at the same time another finishes.
+\item
+State times are unique (ie, there is only one state with each time).
+\item
+The parentheses theorem, Corollary 22.8, and the white path theorem all hold.
+\item
+The dfs forest and the original graph have the same vertices.
+\item
+All edges in the dfs forest are in the original graph.
+\item
+If we start at a given vertex $v$ (ie, the option we pass into dfs is $Some v$), and $v$ is in the graph, then $v$ has a smaller discovery time than any other vertex in the graph.
+\end{enumerate}
+\section{Applications of DFS}
+Now we can prove several applications, algorithms, and additional properties of DFS based only on the above specification.
+\begin{lemma}
+If $u$ is a descendant of $v$ in the DFS forest, then there is a path from $v$ to $u$ in the original graph.
+\end{lemma}
+\begin{proof}
+Follows from induction and property 9.
+\end{proof}
+\begin{theorem}[Reachability]
+For any two distinct vertices $u$ and $v$, there is a path from $u$ to $v$ in the original graph iff $v$ is a descendant of $u$ in the DFS forest when we begin DFS with $u$.
+\end{theorem}
+\begin{proof}
+For the forward direction, if there is a path from $u$ to $v$, then since $u$ has the smallest discovery time of any vertex in the graph (by Property 10), the path from $u$ to $v$ must be white at time $du$. Thus, by the white path theorem, $v$ is a descendant of $u$. Lemma 6.1 proves the reverse direction.
+\end{proof}
+\begin{corollary}
+The existence of a path between two vertices is decidable.
+\end{corollary}
+\begin{proof}
+By Theorem 6.2, there is a path between $u$ and $v$ iff $v$ is a descendant of $u$ in the DFS forest when we start with $u$. By Corollary 22.8, this is equivalent to the condition that $du < dv < fu < fv$, which is decidable.
+\end{proof}
+A less trivial application of DFS is cycle detection. For this, we need the following results about paths and cycles:
+\begin{lemma}
+If there is a path $p=u,x_1,x_2,...x_n,v$ from $u$ to $v$ such that $u=x_i$ for some $i$, then $u,x_{i+1},...x_n,v$ is a path from $u$ to $v$ that is shorter than $p$. 
+\end{lemma}
+\begin{lemma}
+If there is a path $p=u,x_1,...x_{i-1},w,x_{i+1},...x_{j-1},w,x_{j+1},...x_n,v$, then we also have the path $p'=u,x_1,x_{i-1},w,x_{j+1},...,x_n,v$ which is strictly shorter than the original path. In other words, if there is a cycle along the path, then we can remove the cycle to get a smaller path.
+\end{lemma}
+Define a nontrivial cycle to be one that contains at least 2 vertices. In other words, a cycle that is not only a self-loop or consists of a single vertex again and again.
+\begin{lemma}
+If there is a nontrivial cycle starting and ending at $u$, then there is a cycle with no duplicate elements from $u$ to $u$ that contains all the vertices of the original cycle.
+\end{lemma}
+\begin{proof}
+We proceed by strong induction on the length of the cycle. So assume that if there is a nontrivial cycle from $u$ to $u$ of length at most $n$, then we can find a cycle with no duplicates and the same vertices. We want to show this is true if there is a cycle of length $n+1$. If this cycle has no duplicates, then we are good. Otherwise, there is a vertex that is repeated in the cycle. If it is $u$, then by lemma 6.3, we can form a smaller cycle and apply the induction hypothesis. If it is a different vertex $w$, then we can use Lemma 6.3 to find a smaller cycle and again apply the induction hypothesis. Thus, the claim is true.
+\end{proof}
+Finally, we will need the following useful lemma, which provides yet another useful way of classifying descendants:
+\begin{lemma}
+$v$ is a descendant of $u$ in the DFS forest iff $u$ is gray when $v$ is discovered.
+\end{lemma}
+\begin{proof}
+Assume that $v$ is a descendant of $u$ in the DFS forest. Then, by Corollary 22.8, $du < dv < fv < fu$. At time $dv$, therefore, $u$ has been discovered but not finished, so it is gray.
+\\Now assume that $u$ is gray when $v$ is discovered. This means that $du < dv < fu$. By the parentheses theorem, it must be the case that $du < dv < fv < fu$. By Corollary 22.8, $v$ is a descendant of $u$.
+\end{proof}
+Now we can prove the results about cycle detection and back edges. We define a back edge to be an edge from $u$ to $v$ in the original graph, such that $u$ is a descendant of $v$ in the DFS forest. We also have the following equivalent characterization:
+\begin{lemma}
+$(u,v)$ is a back edge iff $(u,v)$ exists in the graph and $v$ is gray when $u$ is discovered.
+\end{lemma}
+\begin{proof}
+Follows from Lemma 6.6.
+\end{proof}
+Now, we can provide a criterion for (nontrivial) cycle detection
+\begin{theorem}[Cycle Detection]
+There is a nontrivial cycle in a graph $g$ iff $g$ has a back edge.
+\end{theorem}
+\begin{proof}
+First, assume that there is a back edge $(u,v)$. Then, this means that $u$ is a descendant of $v$ in the DFS forest. By lemma 6.1, there is a path from $v$ to $u$. Since we also have the edge $(u,v)$, this forms a cycle.
+\\Now, assume that there is a nontrivial cycle. By lemma 6.5, let this cycle have no duplicates. It is still nontrivial. Then, let $x$ be the first vertex discovered in the cycle. Consider the vertex before $x$ in the cycle (which must be different from $x$ because the cycle has no duplicates). Call this vertex $y$. At time $dx$, every other vertex on the cycle is white, so this forms a white path from $x$ to $y$. Thus, by the white path theorem, $y$ is a descendant of $x$. Then, since $y$ is a descendant of $x$, by Lemma 6.6, $x$ is gray at time $dy$. Therefore, by Lemma 6.7, there is a back edge.
+\end{proof}
+Finally, we want to prove that DFS can be used to easily and efficiently implement topological sorting. We will say that a list of vertices $l$ represents a topological sorting of a graph $g$ if the following 3 conditions apply:
+\begin{enumerate}
+\item
+$l$ contains every vertex in $g$.
+\item
+$l$ contains no duplicates.
+\item
+For any $u$ and $v$ such that $l = l1 ++ u :: l2 ++ v :: l3$, there is no edge from $v$ to $u$ in the original graph.
+\end{enumerate}
+We will need a single helper lemma:
+\begin{lemma}
+If $g$ is acyclic (we are working only with directed graphs, so this is equivalent to $g$ being a DAG), then for any edge $(u,v)$ in $g$, $fv < fu$. 
+\end{lemma}
+\begin{proof}
+At time $du$, $v$ is either white, gray, or black. If $v$ is white, then it is a descendant of $u$ in the DFS forest (by the white path theorem), so by Corollary 22.8, $fv < fu$. If $v$ is gray, then we have a back edge, which contradicts the fact that $g$ is acyclic (and thus contains no nontrivial cycles). If $v$ is black, then it has already finished, and $u$ has not yet finished, so $fv < fu$.
+\end{proof}
+Finally, we can provide a simple condition for topological sorting: a list sorted in reverse order of finish times.
+\begin{theorem}[Topological Sorting]
+If $g$ is acyclic and $l$ is a list containing all the vertices of $g$ that is sorted in reverse order of finish times, then $l$ is a topological sorting of $g$.
+\end{theorem}
+\begin{proof}
+Clearly the first two conditions are met by assumption. We must show that if $l = l1 ++ u :: l2 ++ v :: l3$, then $(v,u)$ does not exist. Suppose it does exist. Then, by lemma 6.9, $fu < fv$. But then $v$ should appear later in $l$, since it is sorted. This is a contradiction. Thus, we have a topological sorting.
+\end{proof}
 \end{document}
