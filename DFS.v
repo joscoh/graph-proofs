@@ -3587,29 +3587,29 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
     exists (exist _ x2 H5). simpl. rewrite H1. symmetry. apply H4.
   Qed.
 
-  (*Lemma finish_exists: forall o g v,
-    G.contains_vertex g v = true ->
-    exists (s: state o g), time_of_state o g s = d_time o g v.
-  Proof.
-    intros. unfold f_time. unfold time_of_state. destruct (end_state g o).
-    destruct_all; simpl in *. 
-    assert (valid_dfs_state x g o). eapply multistep_preserves_valid. apply start. apply d.
-    pose proof (all_times_when_done x g o v H0 e H). destruct_all.
-    pose proof (finish_time_means_finished x g o v x0 H0 H2). destruct_all.
-    exists (exist _ x2 H5). simpl. rewrite H2. symmetry. apply H4.
-  Qed.*)
-
-
-
   Definition white o g (s: state o g)(v: G.vertex) : bool :=
     ltb (time_of_state o g s) (d_time o g v).
+
+  Lemma white_def: forall o g s v,
+    white o g s v = true <-> ltb (time_of_state o g s) (d_time o g v) = true.
+  Proof.
+    intros. unfold white. reflexivity.
+  Qed.
 
   Definition gray o g (s: state o g)(v: G.vertex): bool :=
     ltb (time_of_state o g s) (f_time o g v) && leb (d_time o g v) (time_of_state o g s).
 
+  Lemma gray_def: forall o g s v,
+    gray o g s v = true <-> 
+    ltb (time_of_state o g s) (f_time o g v) && leb (d_time o g v) (time_of_state o g s) = true.
+  Proof. unfold gray. reflexivity. Qed.
+
   Definition black o g (s:state o g)(v: G.vertex) : bool :=
     leb (f_time o g v) (time_of_state o g s).
 
+  Lemma black_def: forall o g s v,
+    black o g s v = true <-> leb (f_time o g v) (time_of_state o g s) = true.
+  Proof. unfold black. reflexivity. Qed.
 
   Lemma state_time_unique: forall g o (s s': state o g),
     time_of_state o g s = time_of_state o g s' <-> s = s'.
@@ -3682,8 +3682,6 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
     rewrite H0 in H1. subst. rewrite H1 in H. eapply all_times_unique. eapply multistep_preserves_valid.
     apply start. apply a. apply H0. apply H. 
   Qed. 
-
-
 
   (*Major Results*)
   Theorem parentheses_theorem: forall o g u v,
@@ -3830,6 +3828,20 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
     rewrite H3. rewrite H4. eapply first_vertex_smallest. apply H2. apply H.
     assert (u <> v) by auto. apply H7. apply H4. apply H3.
   Qed.
+
+  Definition back_edge g u v o := (G.contains_edge g u v = true /\ F.desc (dfs_forest o g) v u).
+
+  (*Gets around declaring definition in interface: see if better way*)
+  Lemma back_edge_def: forall g u v o,
+    back_edge g u v o <-> (G.contains_edge g u v = true /\ F.desc (dfs_forest o g) v u).
+  Proof. unfold back_edge. reflexivity. Qed.
+
+  Definition rev_f_time o g u v :=
+    f_time o g u > f_time o g v.
+
+  Lemma rev_f_time_def: forall o g u v,
+    rev_f_time o g u v <-> f_time o g u > f_time o g v.
+  Proof. unfold rev_f_time. reflexivity. Qed.
     
 
 End DFSBaseImpl. 

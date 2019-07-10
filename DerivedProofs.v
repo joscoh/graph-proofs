@@ -45,10 +45,10 @@ Proof.
     assert (G.contains_vertex g a = true). { eapply P.path_implies_in_graph in H0. destruct_all.
     apply H6. apply H4. } pose proof (D.start_vertex _ _ _ H2 H5).
     assert (u <> a). intro. subst. contradiction. apply H6 in H7; clear H6.
-    unfold D.white. rewrite H3. rewrite Nat.ltb_lt. apply H7. }
+    rewrite D.white_def. rewrite H3. rewrite Nat.ltb_lt. apply H7. }
     eapply D.white_path_theorem. apply H2. intros.
     assert (s = x1). eapply D.state_time_unique. rewrite H3. rewrite H5. reflexivity. subst.
-    exists x0. rewrite D.P.path_list_ind_rev. split. apply H0. split. apply H4. unfold D.white.
+    exists x0. rewrite D.P.path_list_ind_rev. split. apply H0. split. apply H4. rewrite D.white_def. 
     assert (G.contains_vertex g v = true). eapply P.path_implies_in_graph in H0. simplify.
     pose proof (D.start_vertex _ _ _ H2 H6 H). rewrite H5. apply Nat.ltb_lt. apply H7.
   - rewrite <- F.desc_list_iff_desc in H0. destruct H0. exists x.
@@ -82,7 +82,7 @@ Qed.
 
 (** ** Application 2: Cycle Detection **)
 
-Definition back_edge g u v o := G.contains_edge g u v = true /\ F.desc (D.dfs_forest o g) v u.
+
 
 
 (*We want to be able to reason about the vertex in the cycle that is discovered first. So we need a few
@@ -188,12 +188,12 @@ Lemma desc_iff_gray_when_discovered: forall (g : G.graph) o u v,
   F.desc (D.dfs_forest o g) u v <-> (forall s, D.time_of_state o g s = D.d_time o g v -> D.gray o g s u = true).
 Proof.
   intros. split; intros.
-  - apply D.descendant_iff_interval in H2. destruct_all.
-    unfold D.gray. simplify. rewrite H3. apply Nat.ltb_lt. omega. rewrite H3. apply Nat.leb_le. omega.
+  - apply D.descendant_iff_interval in H2. destruct_all. rewrite D.gray_def.
+    simplify. rewrite H3. apply Nat.ltb_lt. omega. rewrite H3. apply Nat.leb_le. omega.
     apply F.desc_in_forest in H2. destruct_all. eapply D.same_vertices. apply H2.
     apply F.desc_in_forest in H2. destruct_all. eapply D.same_vertices. apply H5.
-  - pose proof (D.discovery_exists o g v H). destruct_all. specialize (H2 x H3). 
-    unfold D.gray in H2. simplify. rewrite Nat.ltb_lt in H4. rewrite Nat.leb_le in H5.
+  - pose proof (D.discovery_exists o g v H). destruct_all. specialize (H2 x H3). rewrite D.gray_def in H2.
+    simplify. rewrite Nat.ltb_lt in H4. rewrite Nat.leb_le in H5.
     rewrite H3 in H4. rewrite H3 in H5. assert (D.d_time o g u < D.d_time o g v).
     assert ((D.d_time o g u < D.d_time o g v) \/ (D.d_time o g u = D.d_time o g v)) by omega.
     destruct H2. apply H2. apply D.d_times_unique in H2. subst. contradiction.
@@ -208,16 +208,16 @@ Definition back_edge' g u v o := exists s, u <> v /\ D.time_of_state o g s = D.d
 
 (*The two definitions are equivalent*)
 Lemma back_edge_equiv: forall o g u v,
-  back_edge g u v o <->  back_edge' g u v o.
+  D.back_edge g u v o <->  back_edge' g u v o.
 Proof.
   intros. split; intros.
-  - unfold back_edge in H. unfold back_edge'. destruct_all.
+  - rewrite D.back_edge_def in H. unfold back_edge'. destruct_all.
     assert (G.contains_vertex g u = true). eapply G.contains_edge_1. apply H.
     pose proof (D.discovery_exists o g u H1). destruct_all. assert (A:= H0). 
     eapply desc_iff_gray_when_discovered in H0. exists x. split. assert (v <> u). eapply F.desc_neq. apply A.
     auto. split. apply H2. split. apply H. apply H0. apply H1. eapply G.contains_edge_2. apply H.
     eapply F.desc_neq. apply H0. apply H2.
-  - unfold back_edge' in H. unfold back_edge. destruct_all. split. apply H1.
+  - unfold back_edge' in H. rewrite D.back_edge_def.  destruct_all. split. apply H1.
     eapply desc_iff_gray_when_discovered. eapply G.contains_edge_1. apply H1.
     eapply G.contains_edge_2. apply H1. auto. intros.
     assert (s = x). eapply D.state_time_unique. omega. subst. apply H2.
@@ -239,9 +239,9 @@ Proof.
     simplify.
     assert (F.desc (D.dfs_forest o g) x3 v). { eapply D.white_path_theorem.
     eapply G.contains_edge_2. apply H11. intros.
-    exists x4. rewrite D.P.path_list_ind_rev. split. apply H12. split. intros.
-    unfold D.white. rewrite H8. apply Nat.ltb_lt. apply H5. apply H10. right. apply H14.
-    intro. subst. contradiction. unfold D.white. apply Nat.ltb_lt. rewrite H8. apply H5.
+    exists x4. rewrite D.P.path_list_ind_rev. split. apply H12. split. intros. rewrite D.white_def.
+    rewrite H8. apply Nat.ltb_lt. apply H5. apply H10. right. apply H14.
+    intro. subst. contradiction. rewrite D.white_def. apply Nat.ltb_lt. rewrite H8. apply H5.
     apply H10. left. reflexivity. apply H0. }
     pose proof (D.discovery_exists o g v). assert (G.contains_vertex g v = true). 
     eapply G.contains_edge_1. apply H11. apply H14 in H15; clear H14. destruct_all.
@@ -250,7 +250,7 @@ Proof.
     eapply G.contains_edge_2. apply H11. auto. apply H14. destruct (O.eq_dec x x3). unfold O.eq in e.
     subst. exists x1. split. rewrite <- H6. apply H1. auto. auto. auto. exists x. split. apply H3.
     auto. auto. intro. subst. inversion H1.
-  - destruct_all. assert (A:=H). rewrite <- back_edge_equiv in H. unfold back_edge in H.
+  - destruct_all. assert (A:=H). rewrite <- back_edge_equiv in H. rewrite D.back_edge_def in H. 
     unfold P.nontrivial_cyclic. destruct_all.
     unfold back_edge' in A. destruct_all. rewrite <- F.desc_list_iff_desc in H0.
     destruct_all. apply desc_implies_path in H0. exists x0. exists (x :: x2). split.
@@ -262,22 +262,14 @@ Qed.
 (*CLRS defines a simple topological sorting algorithm: run DFS and return a list of the vertices reverse sorted
   by finish time. We will prove that this is a valid topological ordering*)
 
-(*A topological ordering is one where there are no edges going backward in the list and every vertex in the 
-  graph is in the list*)
-Definition topological_sort (l: list G.vertex) (g: G.graph):=
-  (forall v, G.contains_vertex g v = true <-> In v l) /\ 
-  NoDup l /\
-  (forall l1 l2 l3 u v, l = l1 ++ u :: l2 ++ v :: l3 -> G.contains_edge g v u = false).
-
 (*The resulting list is sorted in reverse order of finish time*)
-Definition rev_f_time o g (u v: G.vertex) : Prop :=
-  D.f_time o g u > D.f_time o g v.
+
 
 (*Helpful to know that color is total*)
 Lemma color_total: forall g o s u,
   D.white o g s u = true \/ D.gray o g s u = true \/ D.black o g s u = true.
 Proof.
-  intros. unfold D.white. unfold D.gray. unfold D.black. simplify. repeat(rewrite Nat.ltb_lt).
+  intros. rewrite D.white_def. rewrite D.gray_def. rewrite D.black_def. simplify. repeat(rewrite Nat.ltb_lt).
   repeat(rewrite Nat.leb_le). omega.
 Qed.
 
@@ -298,8 +290,8 @@ Proof.
   - destruct H3. assert (H4:= H). apply P.acylic_no_nontrivial in H. exfalso. apply H.
     rewrite (cycle_iff_back_edge _ o). unfold back_edge'. exists u. exists v. exists x. split.
     intro. subst. unfold P.acyclic in H4. apply H4. exists v. 
-    constructor. apply H0. split. apply H2. split. apply H0. apply H3.
-    unfold D.black in H3. rewrite Nat.leb_le in H3. 
+    constructor. apply H0. split. apply H2. split. apply H0. apply H3. rewrite D.black_def in H3.
+    rewrite Nat.leb_le in H3. 
     assert ((D.f_time o g v = D.time_of_state o g x) \/ (D.f_time o g v < D.time_of_state o g x)) by omega.
     assert (G.contains_vertex g v = true). eapply G.contains_edge_2. apply H0.
     destruct H4. pose proof (D.all_times_unique o g v u H5 H1). omega. assert (u <> v).
@@ -313,15 +305,15 @@ Qed.
 Lemma topological_sort_correct: forall l g o,
   P.acyclic g ->
   (forall v, G.contains_vertex g v = true <-> In v l) ->
-  StronglySorted (rev_f_time o g) l ->
-  topological_sort l g.
+  StronglySorted (D.rev_f_time o g) l ->
+  G.topological_sort l g.
 Proof.
-  intros. unfold topological_sort. split. apply H0. split. apply (StronglySorted_NoDup _ (rev_f_time o g)).
-  intros. intro. unfold rev_f_time in H2. omega. apply H1.
+  intros. rewrite G.topological_sort_def. split. apply H0. split. apply (StronglySorted_NoDup _ (D.rev_f_time o g)).
+  intros. intro. rewrite D.rev_f_time_def in H2.  omega. apply H1.
   intros. subst. apply sort_app in H1. destruct H1. inversion H2; subst.
   rewrite Forall_forall in H6. destruct (G.contains_edge g v u) eqn : ?.
-  specialize (H6 v). assert (rev_f_time o g u v). apply H6. solve_in.
-  unfold rev_f_time in H3. apply (finish_time_edge g o v u) in Heqb.
+  specialize (H6 v). assert (D.rev_f_time o g u v). apply H6. solve_in.
+  rewrite D.rev_f_time_def in H3. apply (finish_time_edge g o v u) in Heqb.
   omega. apply H. reflexivity.
 Qed. 
 

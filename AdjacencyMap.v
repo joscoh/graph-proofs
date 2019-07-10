@@ -326,4 +326,16 @@ Qed.
         rewrite list_of_graph_1. rewrite H. reflexivity.
   Qed.
 
+  Definition topological_sort l g :=
+    (forall v, contains_vertex g v = true <-> In v l) /\ NoDup l /\
+    (forall l1 l2 l3 u v, l = l1 ++ u :: l2 ++ v :: l3 -> contains_edge g v u = false).
+
+  Lemma topological_sort_def: forall l g,
+    topological_sort l g <-> 
+  (forall v, contains_vertex g v = true <-> In v l) /\ NoDup l /\
+  (forall l1 l2 l3 u v, l = l1 ++ u :: l2 ++ v :: l3 -> contains_edge g v u = false).
+  Proof.
+    intros. unfold topological_sort. reflexivity.
+  Qed.
+
 End AdjacencyMap. 

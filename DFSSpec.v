@@ -44,14 +44,20 @@ Module Type DFSBase (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)
     G.contains_vertex g v = true ->
     exists (s: state o g), time_of_state o g s = f_time o g v.*)
 
-  Definition white o g (s: state o g)(v: G.vertex) : bool :=
-    ltb (time_of_state o g s) (d_time o g v).
+  Parameter white: forall (o : option G.vertex) (g : G.graph), state o g -> G.vertex -> bool.
 
-  Definition gray o g (s: state o g)(v: G.vertex): bool :=
-    ltb (time_of_state o g s) (f_time o g v) && leb (d_time o g v) (time_of_state o g s).
+  Parameter white_def: forall o g s v,
+    white o g s v = true <-> ltb (time_of_state o g s) (d_time o g v) = true.
 
-  Definition black o g (s:state o g)(v: G.vertex) : bool :=
-    leb (f_time o g v) (time_of_state o g s).
+  Parameter gray: forall (o : option G.vertex) (g : G.graph), state o g -> G.vertex -> bool.
+
+  Parameter gray_def: forall o g s v,
+    gray o g s v = true <-> ltb (time_of_state o g s) (f_time o g v) && leb (d_time o g v) (time_of_state o g s) = true.
+
+  Parameter black:forall (o : option G.vertex) (g : G.graph), state o g -> G.vertex -> bool.
+
+  Parameter black_def: forall o g s v,
+    black o g s v = true <-> leb (f_time o g v) (time_of_state o g s) = true.
 
   Parameter state_time_unique: forall g o (s s': state o g),
     time_of_state o g s = time_of_state o g s' <-> s = s'.
@@ -108,4 +114,43 @@ Module Type DFSBase (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)
     v <> u ->
     d_time (Some v) g v < d_time (Some v) g u.
 
+  (*Definitions for applications of DFS*)
+
+  Parameter back_edge : G.graph -> G.vertex -> G.vertex -> option G.vertex -> Prop.
+
+  (*Gets around declaring definition in interface: see if better way*)
+  Parameter back_edge_def: forall g u v o,
+    back_edge g u v o <-> (G.contains_edge g u v = true /\ F.desc (dfs_forest o g) v u).
+
+  Parameter rev_f_time: option G.vertex -> G.graph -> G.vertex -> G.vertex -> Prop.
+
+  Parameter rev_f_time_def: forall o g u v,
+    rev_f_time o g u v <-> f_time o g u > f_time o g v.
+  
+
 End DFSBase.
+
+Module Type DFSWithCycleDetect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G).
+  Include (DFSBase O S G F).
+
+  Parameter cycle_detect: G.graph -> bool.
+
+  Parameter cycle_detect_back_edge: forall g,
+    cycle_detect g = true <-> exists g u v o, back_edge g u v o.
+
+End DFSWithCycleDetect.
+
+Module Type DFSWithTopologicalSort(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G).
+  Include (DFSBase O S G F).
+
+  (*We have an additional function that produces a list of vertices reverse sorted by finish time*)
+  Parameter rev_f_time_list: G.graph -> list (G.vertex).
+
+  Parameter topological_sort_condition: forall g o,
+    (forall v, G.contains_vertex g v = true <-> In v (rev_f_time_list g)) /\
+    StronglySorted (rev_f_time o g) (rev_f_time_list g).
+
+End DFSWithTopologicalSort.
+
+
+
