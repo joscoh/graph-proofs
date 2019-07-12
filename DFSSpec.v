@@ -144,11 +144,11 @@ Module Type DFSWithTopologicalSort(O: UsualOrderedType)(S: FSetInterface.Sfun O)
   Include (DFSBase O S G F).
 
   (*We have an additional function that produces a list of vertices reverse sorted by finish time*)
-  Parameter rev_f_time_list: G.graph -> list (G.vertex).
+  Parameter rev_f_time_list: G.graph -> option G.vertex  -> list (G.vertex).
 
   Parameter topological_sort_condition: forall g o,
-    (forall v, G.contains_vertex g v = true <-> In v (rev_f_time_list g)) /\
-    StronglySorted (rev_f_time o g) (rev_f_time_list g).
+    (forall v, G.contains_vertex g v = true <-> In v (rev_f_time_list g o)) /\
+    StronglySorted (rev_f_time o g) (rev_f_time_list g o).
 
 End DFSWithTopologicalSort.
 

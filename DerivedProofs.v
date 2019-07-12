@@ -319,4 +319,45 @@ Qed.
 
 End DerivedProofs.
 
+(*In particular, any implementation of [DFSWithCycleDetect] is correct*)
+
+Module CycleCorrect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)
+  (D: DFSWithCycleDetect O S G F).
+
+  Module A := (DerivedProofs O S G F D).
+
+  Lemma cycle_detection_correct: forall g o,
+    D.cycle_detect o g = true <-> A.P.nontrivial_cyclic g.
+  Proof.
+    intros.
+    rewrite A.cycle_iff_back_edge. rewrite D.cycle_detect_back_edge. setoid_rewrite <- A.back_edge_equiv.
+    reflexivity.
+  Qed.
+
+  Lemma cycle_decidable: forall g,
+    A.P.nontrivial_cyclic g \/ ~ A.P.nontrivial_cyclic g.
+  Proof.
+    intros. destruct (D.cycle_detect None g) eqn : ?.
+    rewrite cycle_detection_correct in Heqb. left. apply Heqb.
+    right. intro. rewrite <- cycle_detection_correct in H. rewrite H in Heqb. inversion Heqb.
+  Qed.
+
+End CycleCorrect.
+
+(* The same for [DFSWithTopologicalSort] *)
+Module TopoSortCorrect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)
+  (D: DFSWithTopologicalSort O S G F).
+
+  Module A := (DerivedProofs O S G F D).
+
+  Lemma topological_sort_alg_correct: forall g o,
+    A.P.acyclic g ->
+    G.topological_sort (D.rev_f_time_list g o) g.
+  Proof.
+    intros. eapply A.topological_sort_correct. apply H. apply D.topological_sort_condition.
+    apply D.topological_sort_condition.
+  Qed. 
+
+End TopoSortCorrect.
+   
   
