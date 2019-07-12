@@ -31,18 +31,6 @@ Module D := (DFS.DFS O M S St G F ).
 
 Import D.
 
-(*
-(*First, we define the types we will need*)
-Definition vertex :=D.vertex.
-Definition graph := D.graph.
-Definition forest := D.forest.
-Definition times_map := M.t nat.
-(*Each vertex on the stack is pushed along with its parent if it has one*)
-Definition stack := list (O.t * (option O.t)).
-(*The state of the program at any given iteration: contains the input graph, the current output forest,
-  the map of discovery times, the map of finish times, the current timestamp, the set of vertices
-  yet to be discovered, the set of vertices yet to be finished, and the stack*)
-*)
 Definition state': Type := graph * forest * times_map * times_map * nat * S.t * S.t * stack * bool.
 
 Definition get_state (s: state') : state :=
@@ -50,38 +38,13 @@ Definition get_state (s: state') : state :=
     |(g, f, f_times, d_times, n, remain_d, remain_f, st, b) => (g, f, f_times, d_times, n, remain_d, remain_f, st)
   end.
 
-(*A preliminary function: add all neighbors of a vertex to a stack unless they have already been
-  discovered*)
-(*Definition add_to_stack (vertex: O.t) (g: graph) (remaining: S.t) : stack :=
-  match G.neighbors_set g vertex with
-    |None => nil
-    |Some s => fold_right (fun v t => if S.mem v (S.remove vertex remaining) then (v, Some vertex) :: t else t) nil (S.elements s)
-  end.*)
-
   Definition check_back_edge (v : vertex) (g: graph) (remain_d remain_f: S.t) : bool :=
     match G.neighbors_set g v with
     | None => false
     | Some s => fold_right (fun x t => if O.eq_dec x v then t else 
                           if negb (S.mem x remain_d) && (S.mem x remain_f) then true else t) false (S.elements s)
     end.
-(*
-Fixpoint pop_stack (s: stack) (remaining: S.t) : stack :=
-  match s with
-  | nil => nil
-  | (v,p) :: t => if (negb (S.mem v remaining)) then pop_stack t remaining
-                  else s
-  end.
 
-Definition start_new (s: stack) (r: S.t) : stack :=
-  match s with
-  | nil => match (S.min_elt r) with
-            | Some x => (x, None) :: nil
-            (*Impossible*)
-            | None => nil
-            end
-  | _ => s
-  end. 
-*)
 Inductive dfs_step': state' -> state' -> Prop :=
   | dfs_discover_root' : forall g f f_times d_times time remain_d remain_f st x tl b,
     S.mem x remain_d = true ->
@@ -410,16 +373,7 @@ Proof.
    apply valid_begins_with_start' in B. pose proof (multi_from_start' _ _ _ A B).
   destruct H2; apply time_incr_multi' in H2; destruct H2; try(subst; reflexivity); try(omega).
 Qed.
-(*
-Lemma done_unique: forall s s' g o,
-  valid_cycle_state s g o ->
-  valid_cycle_state s' g o ->
-  done' s = true ->
-  done' s' = true ->
-  s = s'.
-Proof.
-  intros. assert(forall s', valid_cycle_state s' g o -> dfs_measure (
-*)
+
 Lemma multi_equiv: forall s s',
   dfs_multi' s s' ->
   dfs_multi (get_state s) (get_state s').
@@ -739,9 +693,8 @@ Definition times_function := G.vertex -> nat.
     rewrite H5. rewrite H6. rewrite H7. eapply desc_iff_time_interval; try(eassumption).
   Qed.
 
-
   (*Proves that the version of white in the interface (referencing only finish times) is equivalent to
-    the other set based definition TODO: do this for the rest of the colors*)
+    the other set based definition*)
   Lemma white_equiv: forall o g (s: state o g) v,
     G.contains_vertex g v = true ->
     white o g s v = true <-> D.white (get_state (proj1_sig s)) v = true.
@@ -802,8 +755,6 @@ Definition times_function := G.vertex -> nat.
         eapply G.contains_edge_2. apply H1. apply H1.
   Qed.
 
-
-(*TODO: start with this tomorrow*)
   Theorem white_path_theorem: forall o g u v,
     G.contains_vertex g u = true ->
     F.desc (dfs_forest o g) u v <-> (forall s, time_of_state o g s = d_time o g u ->
@@ -867,16 +818,12 @@ Definition times_function := G.vertex -> nat.
     assert (u <> v) by auto. apply H7. apply H4. apply H3.
   Qed.
 
-
-
   Definition back_edge g u v o := (G.contains_edge g u v = true /\ F.desc (dfs_forest o g) v u).
 
   (*Gets around declaring definition in interface: see if better way*)
   Lemma back_edge_def: forall g u v o,
     back_edge g u v o <-> (G.contains_edge g u v = true /\ F.desc (dfs_forest o g) v u).
   Proof. unfold back_edge. reflexivity. Qed.
-
-
 
   Definition rev_f_time o g u v :=
     f_time o g u > f_time o g v.
