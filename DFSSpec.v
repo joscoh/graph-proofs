@@ -133,10 +133,10 @@ End DFSBase.
 Module Type DFSWithCycleDetect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G).
   Include (DFSBase O S G F).
 
-  Parameter cycle_detect: G.graph -> bool.
+  Parameter cycle_detect: option G.vertex -> G.graph -> bool.
 
-  Parameter cycle_detect_back_edge: forall g,
-    cycle_detect g = true <-> exists g u v o, back_edge g u v o.
+  Parameter cycle_detect_back_edge: forall g o,
+    cycle_detect o g = true <-> exists u v, back_edge g u v o.
 
 End DFSWithCycleDetect.
 

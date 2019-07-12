@@ -15,6 +15,7 @@ Require Import DFSSpec.
 Require Import Coq.Init.Nat.
 Require Import Coq.Logic.EqdepFacts.
 Require Import DFS.
+Require Import DerivedProofs.
 
 (*In order to perform DFS, we need a lawful Graph (the input), Tree (the output), Set (for keeping
   track of the vertices not yet seen), Map (for storing discover/finish times), and UsualOrderedType
@@ -26,7 +27,8 @@ Module P := FMapFacts.WProperties_fun O M.
 Module P2 := FSetProperties.WProperties_fun O S.
 Module O2 := OrderedTypeFacts O.
 Module Pa := (Path.PathTheories O S G).
-Module D := (DFS.DFS O M S St G F).
+Module D := (DFS.DFS O M S St G F ).
+
 Import D.
 
 (*
@@ -408,7 +410,16 @@ Proof.
    apply valid_begins_with_start' in B. pose proof (multi_from_start' _ _ _ A B).
   destruct H2; apply time_incr_multi' in H2; destruct H2; try(subst; reflexivity); try(omega).
 Qed.
-
+(*
+Lemma done_unique: forall s s' g o,
+  valid_cycle_state s g o ->
+  valid_cycle_state s' g o ->
+  done' s = true ->
+  done' s' = true ->
+  s = s'.
+Proof.
+  intros. assert(forall s', valid_cycle_state s' g o -> dfs_measure (
+*)
 Lemma multi_equiv: forall s s',
   dfs_multi' s s' ->
   dfs_multi (get_state s) (get_state s').
@@ -553,10 +564,9 @@ Proof.
   intros. split; intros. eapply back_edge_implies_true; eassumption.
   eapply true_implies_back_edge; eassumption.
 Qed.
-
 (** ** Instantiating the [DFSBase] interface **)
 
-Module DFSWithCycleDetectImpl <: (DFSSpec.DFSWithCycleDetect O S G F).
+Module DFSWithCycleDetectBase <: (DFSSpec.DFSBase O S G F).
 
   Module P := D.Pa.
 
@@ -792,6 +802,7 @@ Definition times_function := G.vertex -> nat.
         eapply G.contains_edge_2. apply H1. apply H1.
   Qed.
 
+
 (*TODO: start with this tomorrow*)
   Theorem white_path_theorem: forall o g u v,
     G.contains_vertex g u = true ->
@@ -802,39 +813,41 @@ Definition times_function := G.vertex -> nat.
     destruct_all. assert (valid_dfs_state (get_state x) g o). apply valid_state_equiv. eapply multistep_preserves_valid'.
     apply start'. apply H0. unfold time_of_state. simpl. split; intros. destruct s; simpl in *.
     - apply (d_time_equiv o) in H.
-      destruct (end_state g); simpl in *. destruct_all. assert ((get_state x1) = (get_state x)). eapply done_unique.
-      apply valid_state_equiv.
-      eapply multistep_preserves_valid'. apply start'. apply H5. apply H2. apply H6. apply H1.
+      destruct (end_state g o); simpl in *. destruct_all. assert (get_state x1 = get_state x).
+      eapply done_unique. eapply valid_state_equiv. eapply multistep_preserves_valid'. apply start'.
+      apply H5. apply H2. rewrite <- done_equiv. apply H6. rewrite <- done_equiv. apply H1.
       subst. rewrite <- H7 in H4. rewrite H in H4. rewrite H7 in H. pose proof (discovery_time_means_discovered _ _ _ _ _ H2 H).
-      destruct_all. rewrite H9 in H. rewrite H9 in H11. rewrite done_equiv in H1.
-      pose proof (D.white_path_theorem  _ _ _ _ v _ H2 H10 H1 H11). destruct H12.
-      assert (get_state x1 = get_state x0). eapply times_unique. apply valid_state_equiv.
-      eapply multistep_preserves_valid'. apply start'. apply H5. apply valid_state_equiv. apply v0.
-      rewrite H4. rewrite H7. 
-      omega. apply H9. apply v0. rewrite <- H8. rewrite H4. reflexivity.
-      subst. apply H12. apply H3. 
+      destruct_all. rewrite H9 in H. rewrite H9 in H11. 
+      assert (x2 = get_state x0). eapply times_unique. apply H10. apply valid_state_equiv. apply v0.
+      rewrite H4. symmetry. apply H9. subst.
+      assert (done (get_state x) = true). rewrite <- done_equiv. apply H1.
+      pose proof (D.white_path_theorem  _ _ _ _ v _ H2 H10 H12 H11). destruct H13. apply H14. apply H3.
     - apply (d_time_equiv o) in H. destruct (end_state g o); simpl in *. destruct_all.
-      assert (x = x0). eapply done_unique. apply H2. eapply multistep_preserves_valid. apply start. apply H4.
-      apply H1. apply H5. subst.  rewrite H in H3.  
-      pose proof (discovery_time_means_discovered _ _ _ _ _ H2 H). destruct_all.
-      eapply DFS.white_path_theorem. apply H2. apply H8. apply H1. rewrite H7 in H9. apply H9.
-      specialize (H3 (exist (fun s => valid_dfs_state s g o) x H8)).
-      simpl in H3. apply H3. rewrite H7. reflexivity.
-  Qed.
+      assert (get_state x = get_state x0). eapply done_unique. apply H2. apply valid_state_equiv.
+      eapply multistep_preserves_valid'. apply start'. apply H4. all: try(rewrite <- done_equiv; assumption).
+      rewrite H6 in H3. rewrite H in H3. rewrite <- H6 in H.
+      assert (valid_cycle_state x g o). eapply multistep_preserves_valid'. apply start'. apply H0.
+      pose proof (discovery_time_means_discovered' _ _ _ _ _ H7 H). destruct_all.
+      eapply D.white_path_theorem. apply H2. apply valid_state_equiv. apply H10. rewrite <- done_equiv. apply H1. rewrite H9 in H11.
+      apply H11.
+      specialize (H3 (exist (fun s => valid_cycle_state s g o) x1 H10)).
+      simpl in H3. apply H3. rewrite H9. reflexivity.
+  Qed. 
 
   (* Basic results about vertices and edges *)
   Lemma same_vertices: forall o g v,
     G.contains_vertex g v = true <-> F.contains_vertex (dfs_forest o g) v = true.
   Proof.
     intros. unfold dfs_forest. destruct (end_state g o); simpl in *; destruct_all.
-    eapply same_vertices. eapply multistep_preserves_valid. apply start. apply H. apply H0.
+    eapply same_vertices. apply valid_state_equiv. eapply multistep_preserves_valid'. apply start'.
+    apply H. apply H0.
   Qed.
 
   Lemma same_edges: forall o g u v,
     F.is_child (dfs_forest o g) u v = true -> G.contains_edge g u v = true.
   Proof.
     intros. unfold dfs_forest in *.  destruct (end_state g o); simpl in *; destruct_all. 
-    eapply edges_in_forest_in_graph. eapply multistep_preserves_valid. apply start.
+    eapply edges_in_forest_in_graph. apply valid_state_equiv. eapply multistep_preserves_valid'. apply start'.
     apply H0. apply H.
   Qed. 
 
@@ -845,13 +858,16 @@ Definition times_function := G.vertex -> nat.
     d_time (Some v) g v < d_time (Some v) g u.
   Proof.
     intros. unfold d_time. destruct (end_state g (Some v)); destruct_all; simpl in *.
-    assert (valid_dfs_state x g (Some v)). eapply multistep_preserves_valid. apply start.
+    assert (valid_dfs_state (get_state x) g (Some v)). apply valid_state_equiv.
+    eapply multistep_preserves_valid'. apply start'.
     apply d.
-    pose proof (all_times_when_done x g (Some v) u H2 e H0).
-    pose proof (all_times_when_done x g (Some v) v H2 e H). destruct_all.
+    pose proof (all_times_when_done (get_state x) g (Some v) u H2 e H0).
+    pose proof (all_times_when_done (get_state x) g (Some v) v H2 e H). destruct_all.
     rewrite H3. rewrite H4. eapply first_vertex_smallest. apply H2. apply H.
     assert (u <> v) by auto. apply H7. apply H4. apply H3.
   Qed.
+
+
 
   Definition back_edge g u v o := (G.contains_edge g u v = true /\ F.desc (dfs_forest o g) v u).
 
@@ -860,6 +876,8 @@ Definition times_function := G.vertex -> nat.
     back_edge g u v o <-> (G.contains_edge g u v = true /\ F.desc (dfs_forest o g) v u).
   Proof. unfold back_edge. reflexivity. Qed.
 
+
+
   Definition rev_f_time o g u v :=
     f_time o g u > f_time o g v.
 
@@ -867,20 +885,115 @@ Definition times_function := G.vertex -> nat.
     rev_f_time o g u v <-> f_time o g u > f_time o g v.
   Proof. unfold rev_f_time. reflexivity. Qed.
 
-Print D.
+End DFSWithCycleDetectBase.
 
+Module A := DerivedProofs.DerivedProofs O S G F DFSWithCycleDetectBase.
+
+Module DFSWithCycleDetectImpl <: (DFSSpec.DFSWithCycleDetect O S G F).
+
+  Include DFSWithCycleDetectBase.
+
+  Import DFSWithCycleDetectBase.
+
+  Definition cycle_detect o (g: G.graph) := get_bool (proj1_sig (end_state g o)).
+
+  (*Proves that the version of gray in the interface (referencing only finish times) is equivalent to
+    the other set based definition *)
+  Lemma gray_equiv: forall o g (s: state o g) v,
+    G.contains_vertex g v = true ->
+    gray o g s v = true <-> D.gray (get_state (proj1_sig s)) v = true.
+  Proof.
+    intros. assert (A:= H). assert (B:= H). apply (d_time_equiv o) in A. apply (f_time_equiv o) in B. 
+    split; intros.
+    - unfold gray in H0. unfold time_of_state in H0. unfold d_time in H0.
+      destruct s; simpl in *. destruct (end_state g o); simpl in *. destruct_all.
+      rewrite A in H3. rewrite Nat.ltb_lt in H0. unfold D.gray.
+      assert (V: valid_dfs_state (get_state x) g o) by (apply valid_state_equiv; assumption).
+      assert (V1: valid_dfs_state (get_state x0) g o). apply valid_state_equiv. eapply multistep_preserves_valid'.
+      apply start'. apply H1.
+      pose proof (discovery_time_means_discovered _ _ _ _ _ V1 A). destruct_all.
+      assert (dfs_multi x1 (get_state x)). assert (dfs_multi x1 (get_state x) \/ dfs_multi (get_state x) x1).
+      eapply multi_from_start. apply valid_begins_with_start. apply V. apply valid_begins_with_start.
+      apply H6. destruct H8. apply H8. apply time_incr_multi in H8. destruct H8. subst.
+      apply multi_refl. rewrite Nat.leb_le in H3. omega. 
+      assert (S.mem v (get_remain_d (get_state x)) = false). destruct (S.mem v (get_remain_d (get_state x))) eqn : ?.
+      pose proof (v_discovered_iff_not_remain _ _ _ _ V H). destruct H9. apply contrapositive in H10.
+      exfalso. apply H10. eapply discovery_time_constant in H7. exists (d_time o g v). apply H7.
+      apply H6. apply H8. rewrite Heqb. intro. inversion H11. reflexivity. rewrite H9. split. reflexivity.
+      pose proof (finish_time_means_finished _ _ _ _ _ V1 B). destruct_all.
+      assert (dfs_multi (get_state x) x2). assert (dfs_multi x2 (get_state x) \/ dfs_multi (get_state x) x2).
+       eapply multi_from_start. apply valid_begins_with_start. apply V. apply valid_begins_with_start.
+      apply H12. destruct H14. apply time_incr_multi in H14. destruct H14. subst. apply multi_refl.
+      omega. apply H14. destruct (S.mem v (get_remain_f (get_state x))) eqn : ?. reflexivity.
+      rewrite (v_finished_iff_not_remain) in Heqb. destruct Heqb. assert (x3 <= get_time (get_state x)).
+      eapply f_times_leq_current_time. eassumption. apply H15. eapply finish_time_constant in H15.
+      rewrite H15 in H13. inversion H13; subst. omega. eassumption. apply H14. apply V. apply H.
+    - unfold D.gray in H0. unfold gray. unfold time_of_state. destruct s. destruct (end_state g o).
+      simpl in *. destruct_all. simplify. 
+      + assert (V: valid_dfs_state (get_state x0) g o). apply valid_state_equiv. eapply multistep_preserves_valid'.
+        apply start'. apply H1. pose proof (finish_time_means_finished _ _ _ _ _ V B). destruct_all.
+        assert (dfs_multi (get_state x) x1). assert (dfs_multi x1 (get_state x) \/ dfs_multi (get_state x) x1).
+        eapply multi_from_start. apply valid_begins_with_start. apply valid_state_equiv. apply v0.
+        apply valid_begins_with_start. apply H6. destruct H8.
+        assert (M.find v (get_f_times (get_state x)) = Some (f_time o g v)). eapply finish_time_constant.
+        apply H6. apply H7. apply H8. assert (exists n, M.find v (get_f_times (get_state x)) = Some n).
+        exists (f_time o g v). apply H9. rewrite <- v_finished_iff_not_remain in H10. rewrite H10 in H3. inversion H3.
+        apply valid_state_equiv. apply v0. apply H. apply H8. apply time_incr_multi in H8. destruct H8.
+        subst. assert (exists n, M.find v (get_f_times (get_state x)) = Some n). exists (f_time o g v); assumption.
+        rewrite <- v_finished_iff_not_remain in H8. rewrite H8 in H3. inversion H3. apply valid_state_equiv.
+        apply v0. apply H. rewrite Nat.ltb_lt. omega.
+      + assert (V: valid_dfs_state (get_state x0) g o). apply valid_state_equiv. eapply multistep_preserves_valid'.
+        apply start'. apply H1. pose proof (discovery_time_means_discovered _ _ _ _ _ V A). destruct_all.
+        assert (dfs_multi x1 (get_state x)). assert (dfs_multi x1 (get_state x) \/ dfs_multi (get_state x) x1).
+        eapply multi_from_start. apply valid_begins_with_start. apply valid_state_equiv. apply v0.
+        apply valid_begins_with_start. apply H6. destruct H8. apply H8.
+        rewrite v_discovered_iff_not_remain in H0. destruct H0. assert (T:= H8). apply time_incr_multi in H8.
+        destruct H8. subst. apply multi_refl.  
+        assert (M.find v (get_d_times x1) = Some x2). eapply discovery_time_constant. apply valid_state_equiv.
+        apply v0. apply H0. apply T. rewrite H9 in H7. inversion H7; subst. eapply d_times_leq_current_time in H9.
+        eapply d_times_leq_current_time in H0. omega. apply valid_state_equiv. apply v0. apply H6.
+        eapply valid_state_equiv. apply v0. apply H. assert (M:= H8). apply time_incr_multi in H8. destruct H8.
+        subst. rewrite H5. rewrite Nat.leb_le. omega. rewrite Nat.leb_le. omega.
+Qed. 
+
+  Lemma back_edge_equiv: forall g u v o,
+    back_edge g u v o <-> back_edge' g u v o.
+  Proof.
+    intros. rewrite A.back_edge_equiv. unfold back_edge'. unfold A.back_edge'.
+    unfold state. unfold time_of_state.
+    unfold d_time. split; intros.
+    - destruct_all. assert (C: G.contains_vertex g u = true). eapply G.contains_edge_1. apply H1.
+      apply (d_time_equiv o) in C.  destruct x. simpl in *.  
+      destruct (end_state g o). simpl in *. destruct_all. rewrite C in H0. rewrite <- H0 in C.
+      exists x. split. apply v0. split.
+      apply H. split. assert (V: valid_dfs_state (get_state x0) g o). apply valid_state_equiv.
+      eapply multistep_preserves_valid'. apply start'. apply H3.
+      pose proof (discovery_time_means_discovered _ _ _ _ _ V C). destruct_all.
+      assert (x1 = get_state x). eapply times_unique. apply H7. eapply valid_state_equiv. apply v0.
+      omega. subst. apply H8. split. apply H1. 
+      rewrite gray_equiv in H2. simpl in *. apply H2. eapply G.contains_edge_2. apply H1.
+    - destruct_all. exists (exist _ x H). split. apply H0. simpl in *.
+      assert (G.contains_vertex g u = true). eapply G.contains_edge_1.
+      apply H2. apply (d_time_equiv o) in H4. destruct (end_state g o).
+      destruct_all; simpl in *. split. rewrite H4. 
+      assert (dfs_multi (get_state x) (get_state x0) \/ dfs_multi (get_state x0) (get_state x) ).
+      eapply multi_from_start. apply valid_begins_with_start. eapply valid_state_equiv. 
+      eapply multistep_preserves_valid'. apply start'. apply d. 
+      eapply valid_begins_with_start. apply valid_state_equiv. apply H. destruct H5.
+      eapply discovery_time_constant in H1. rewrite H1 in H4. inversion H4; subst. reflexivity.
+      apply valid_state_equiv. apply H. apply H5. eapply discovery_time_constant in H4.
+      rewrite H4 in H1. inversion H1; subst. reflexivity. eapply valid_state_equiv.
+      eapply multistep_preserves_valid'. apply start'. apply d. apply H5. split. apply H2.
+      rewrite gray_equiv. simpl. apply H3. eapply G.contains_edge_2. apply H2.
+Qed.
+
+   Lemma cycle_detect_back_edge: forall g o,
+    cycle_detect o g = true <-> exists u v, back_edge g u v o.
+  Proof.
+    intros. unfold cycle_detect. setoid_rewrite back_edge_equiv.  rewrite back_edge_iff_true. reflexivity.
+    destruct (end_state g o); simpl. destruct a. eapply multistep_preserves_valid'. apply start'. apply H.
+    destruct (end_state g o); simpl; destruct_all; assumption.
+  Qed.
 End DFSWithCycleDetectImpl.
 
-
-
-
-  
-
-
-
-
-
-
-
-
-
+End DFSCycle.
