@@ -730,5 +730,4 @@ Definition times_function := G.vertex -> nat.
    
 
 End DFSWithCycleDetectBase.
-
-
+End DFSTopoSort.
