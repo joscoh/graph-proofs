@@ -8,6 +8,7 @@ Require Import Coq.Init.Nat.
 Require Import Helper.
 Require Import Coq.Arith.PeanoNat.
 Require Import Omega.
+Require Import Coq.Lists.ListDec.
 
 (* This module consists of proofs of both properties and applications of DFS that use only the specification
     defined in DFSBase and thus are independent of any actual DFS algorithm. The significant results include
@@ -53,6 +54,24 @@ Proof.
     pose proof (D.start_vertex _ _ _ H2 H6 H). rewrite H5. apply Nat.ltb_lt. apply H7.
   - rewrite <- F.desc_list_iff_desc in H0. destruct H0. exists x.
     eapply desc_implies_path. apply H0.
+Qed.
+
+Theorem unique_paths: forall g u v,
+  u <> v ->
+  (exists l, P.path_list_rev g u v l = true) ->
+  exists l, P.path_list_rev g u v l = true /\ NoDup l /\ ~In u l /\ ~In v l.
+Proof.
+  intros. eapply reachability in H0. rewrite <- F.desc_list_iff_desc in H0. destruct H0. exists x.
+  split. eapply desc_implies_path. apply H0. split. destruct (NoDup_dec O.eq_dec x). apply n.
+  rewrite no_no_dup in n. destruct_all. subst. apply F.desc_app in H0. destruct H0.
+  apply F.desc_app in H1. destruct H1. assert (exists l, F.desc_list (D.dfs_forest (Some u) g) x0 x0 l = true).
+  exists x2. assumption. rewrite F.desc_list_iff_desc in H3. apply F.desc_neq in H3. contradiction. apply O.eq_dec.
+  split. intro. apply in_split_app_fst in H1. destruct_all. subst. apply F.desc_app in H0.
+  destruct H0. assert (exists l, F.desc_list (D.dfs_forest (Some u) g) u u l = true). exists x1. assumption.
+  rewrite F.desc_list_iff_desc in H3. apply F.desc_neq in H3. contradiction. apply O.eq_dec.
+  intro.   apply in_split_app_fst in H1. destruct_all. subst. apply F.desc_app in H0.
+  destruct H0. assert (exists l, F.desc_list (D.dfs_forest (Some u) g) v v l = true). exists x0. assumption.
+  rewrite F.desc_list_iff_desc in H3. apply F.desc_neq in H3. contradiction. apply O.eq_dec. apply H.
 Qed.
 
 (*Prove cycle later*)

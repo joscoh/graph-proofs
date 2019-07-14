@@ -397,6 +397,18 @@ Parameter desc_neq: forall f u v,
   desc f u v ->
   u <> v.
 
+  Lemma desc_app: forall g u v a l1 l2,
+    desc_list g u v (l1 ++ a :: l2) = true <->
+    desc_list g a v l1 = true /\ desc_list g u a l2 = true.
+  Proof.
+    intros. split; intros. generalize dependent v. generalize dependent l2. induction l1; intros.
+    - simpl in H. simpl. rewrite andb_true_iff in H. apply H.
+    - simpl in *. simplify; apply IHl1 in H1; destruct H1; assumption.
+    - destruct_all. generalize dependent v. generalize dependent a. revert l2. induction l1; intros.
+      + simpl in *. simplify.
+      + simpl in *. simplify.
+  Qed.
+
     
 (*might need equal lemma to ensure it is acyclic but we 
 will see*)

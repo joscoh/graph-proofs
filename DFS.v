@@ -1007,102 +1007,8 @@ Proof.
         -- intuition.
 Qed. 
 
-(** ** Dealing with set inequality **)
-Section SetNeq.
-
-(*It turns out to be surprisingly involved to prove that if two sets are not equal, then there
-  is an element in one but not the other. I prove this by proving an analogous result for sorted lists
-  and using S.elements to relate the two*)
-
-(*List inequality as a function, since it gives us the element in one list but not the other
-  directly*)
-Fixpoint list_neq (l1 l2: list O.t) :=
-  match l1, l2 with
-  | x1 :: t1, x2 :: t2 => if O.eq_dec x1 x2 then list_neq t1 t2 else true
-  | nil, nil => false
-  | _, _ => true
-  end.
-
-(*The above function actually defines list inequality*)
-Lemma list_eq_neq: forall l1 l2,
-  l1 <> l2 <-> list_neq l1 l2 = true.
-Proof.
-  intros. split; intros.
-  - generalize dependent l2. induction l1; intros.
-    + simpl. destruct l2. contradiction. reflexivity.
-    + simpl. destruct l2 eqn : ?. reflexivity.
-      destruct (O.eq_dec a t).
-      * setoid_rewrite e in H. assert (l1 <> l). intro. subst. contradiction.
-        apply IHl1. apply H0.
-      * reflexivity.
-  - intro. subst. induction l2. simpl in H. inversion H. simpl in H.
-    destruct (O.eq_dec a a). apply IHl2. apply H. apply n. apply eq_refl.
-Qed. 
-
-(*The result for lists: if two sorted lists are unequal, then there is an element in
-  one but not the other*)
-Lemma list_neq_has_diff_elements: forall (l1 l2: list O.t),
-  StronglySorted O.lt l1 ->
-  StronglySorted O.lt l2 ->
-  l1 <> l2 ->
-  (exists x, In x l1 /\ ~In x l2) \/ (exists x, ~In x l1 /\ In x l2).
-Proof.
-  intros. rewrite list_eq_neq in H1. generalize dependent l2; induction l1; intros.
-  - simpl in H1. destruct l2 eqn : ?. inversion H1. right. exists t.
-    split. auto. simpl. left. reflexivity.
-  - simpl in H1. destruct l2 eqn : ?.
-    + left. exists a. split. simpl. left. reflexivity. auto.
-    + inversion H0; subst. inversion H; subst. destruct (O.eq_dec a t) eqn : ?. 
-      * setoid_rewrite e. apply IHl1 in H4. destruct H4.
-        -- destruct H2. destruct H2. assert (O.lt t x). rewrite Forall_forall in H7.
-           setoid_rewrite <- e. eapply H7. apply H2. left. exists x. split. simpl.
-           right. apply H2. simpl. intro. destruct H8. subst. apply O.lt_not_eq in H4.
-           apply H4. apply eq_refl. contradiction.
-        -- destruct H2. destruct H2. assert (O.lt t x). rewrite Forall_forall in H5.
-           eapply H5. apply H3. right. exists x. split.  simpl. intro. destruct H8.
-           subst. apply O.lt_not_eq in H4. apply H4. apply eq_refl. contradiction.
-           simpl. right. apply H3.
-        -- apply H6.
-        -- apply H1.
-      * pose proof (O2.lt_total a t). destruct H2.
-        -- left. exists a. split. simpl. left. reflexivity. rewrite Forall_forall in H5.
-           simpl. intro. destruct H3. subst. apply n. apply eq_refl. apply H5 in H3.
-           apply O2.lt_le in H3. contradiction.
-        -- destruct H2.
-            ** subst. exfalso. apply n. apply eq_refl.
-            ** right. exists t. split. simpl. intro. destruct H3. subst. apply n. apply eq_refl.
-               rewrite Forall_forall in H7. apply H7 in H3. apply O2.lt_le in H3.
-               contradiction. simpl. left. reflexivity.
-Qed. 
-
-(*The analogous result for sets*)
-Lemma unequal_sets: forall s1 s2,
-  S.equal s1 s2 = false ->
-  (exists v, S.In v s1 /\ ~S.In v s2) \/ (exists v, ~S.In v s1 /\ S.In v s2).
-Proof.
-  intros. destruct (list_neq (S.elements s1) (S.elements s2)) eqn : ?.
-  - rewrite <- list_eq_neq in Heqb. apply list_neq_has_diff_elements in Heqb.
-    destruct Heqb.
-    + destruct H0. destruct H0. rewrite In_InA_equiv in *. apply S.elements_2 in H0.
-      assert (~S.In x s2). intro. apply S.elements_1 in H2. contradiction.
-      left. exists x. split; assumption.
-    + destruct H0. destruct H0. rewrite In_InA_equiv in *. apply S.elements_2 in H1.
-      assert (~S.In x s1). intro. apply S.elements_1 in H2. contradiction.
-      right. exists x. split; assumption.
-    + apply Sorted_StronglySorted. unfold Relations_1.Transitive. intros.
-      eapply O.lt_trans. apply H0. apply H1. apply S.elements_3.
-    + apply Sorted_StronglySorted. unfold Relations_1.Transitive. intros.
-      eapply O.lt_trans. apply H0. apply H1. apply S.elements_3.
-  - destruct (list_eq_dec O.eq_dec (S.elements s1) (S.elements s2)).
-    + assert (forall x, S.In x s1 <-> S.In x s2). { intros.
-      split; intros; apply S.elements_1 in H0.  all: apply S.elements_2.
-      rewrite <- e. assumption. rewrite e. assumption. }
-      assert (~S.Equal s1 s2). intro. apply S.equal_1 in H1. rewrite H1 in H. inversion H.
-      assert (S.Equal s1 s2). unfold S.Equal. apply H0. contradiction.
-    + rewrite list_eq_neq in n. rewrite n in Heqb. inversion Heqb.
-Qed.
-
-(*What we wanted to prove: if pop_stack returns nil, then the remain_d and remain_f sets are equal.
+Module SN := Helper.SetNeq O S.
+(*If pop_stack returns nil, then the remain_d and remain_f sets are equal.
   In particular, this is true when we finish*)
 Lemma pop_stack_nil_finished: forall s g o,
   valid_dfs_state s g o ->
@@ -1110,7 +1016,7 @@ Lemma pop_stack_nil_finished: forall s g o,
   S.equal (get_remain_d s) (get_remain_f s) = true.
 Proof.
   intros. destruct (S.equal (get_remain_d s) (get_remain_f s)) eqn : ?. reflexivity.
-  apply unequal_sets in Heqb. destruct Heqb; destruct H1.
+  apply SN.unequal_sets in Heqb. destruct Heqb; destruct H1.
   - destruct H1. apply S.mem_1 in H1. eapply not_f_if_not_d in H1. apply S.mem_2 in H1.
     contradiction. apply H.
   - destruct H1. assert (gray s x = true). unfold gray. simplify.
@@ -1119,8 +1025,6 @@ Proof.
     pose proof (gray_on_stack _ _ _ _ H H3). destruct H4. eapply in_pop in H4.
     rewrite H0 in H4. inversion H4. apply S.mem_1. apply H2.
 Qed.
-
-End SetNeq.
 
 (** Executable DFS Algorithm **)
 Section Exec.
