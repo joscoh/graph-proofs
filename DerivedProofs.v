@@ -33,6 +33,17 @@ Proof.
   - simpl in *. simplify. eapply D.same_edges. apply H0. 
 Qed. 
 
+(*Technically I could add this to the DFS spec so that it is true even if there is only 1 vertex in the graph,
+  but I will see if I need it*)
+Lemma discover_before_finish: forall g o u v,
+  G.contains_vertex g u = true ->
+  G.contains_vertex g v = true ->
+  u <> v ->
+  D.d_time o g u < D.f_time o g u.
+Proof.
+  intros. pose proof (D.parentheses_theorem o g u v H H0 H1). omega.
+Qed.
+
 (** ** Application 1 of DFS: Reachability **)
 Theorem reachability: forall g u v,
   u <> v ->

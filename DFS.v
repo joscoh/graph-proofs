@@ -3491,6 +3491,18 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
     exists (exist _ x2 H5). simpl. rewrite H1. symmetry. apply H4.
   Qed.
 
+  Lemma finish_exists: forall o g v,
+    G.contains_vertex g v = true ->
+    exists (s: state o g), time_of_state o g s = f_time o g v.
+  Proof.
+    intros. unfold f_time. unfold time_of_state. destruct (end_state g o).
+    destruct_all; simpl in *. 
+    assert (valid_dfs_state x g o). eapply multistep_preserves_valid. apply start. apply d.
+    pose proof (all_times_when_done x g o v H0 e H). destruct_all.
+    pose proof (finish_time_means_finished x g o v x0 H0 H2). destruct_all.
+    exists (exist _ x2 H5). simpl. rewrite H2. symmetry. apply H4.
+  Qed.
+
   Definition white o g (s: state o g)(v: G.vertex) : bool :=
     ltb (time_of_state o g s) (d_time o g v).
 

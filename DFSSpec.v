@@ -40,9 +40,9 @@ Module Type DFSBase (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)
     G.contains_vertex g v = true ->
     exists (s: state o g), time_of_state o g s = d_time o g v.
 
-  (*Parameter finish_exists: forall o g v,
+  Parameter finish_exists: forall o g v,
     G.contains_vertex g v = true ->
-    exists (s: state o g), time_of_state o g s = f_time o g v.*)
+    exists (s: state o g), time_of_state o g s = f_time o g v.
 
   Parameter white: forall (o : option G.vertex) (g : G.graph), state o g -> G.vertex -> bool.
 

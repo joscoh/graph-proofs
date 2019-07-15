@@ -319,6 +319,29 @@ Proof.
       apply H0. apply multi_R. apply H1. split. apply H5. split. apply H6. apply H7.
 Qed.
 
+Lemma finish_time_means_finished': forall s g o v n,
+  valid_topo_state s g o->
+  M.find v (get_f_times (get_state s)) = Some n ->
+  (exists s', dfs_multi' s' s /\ n = get_time (get_state s') /\ valid_topo_state s' g o /\
+   M.find v (get_f_times (get_state s')) = Some n).
+Proof.
+  intros. induction H; subst; simpl in *. 
+  - rewrite P.F.empty_o in H0. inversion H0.
+  - inversion H1; subst; simpl in *.
+     + apply IHvalid_topo_state in H0. destruct_all. exists x0. split. eapply multi_trans.
+      apply H0. apply multi_R. apply H1. split. apply H4. split. apply H5. apply H6.
+     + apply IHvalid_topo_state in H0. destruct_all. exists x0. split. eapply multi_trans.
+      apply H0. apply multi_R. apply H1. split. apply H4. split. apply H5. apply H6.
+     + destruct (O.eq_dec v x).
+      * unfold O.eq in e. subst. rewrite P.F.add_eq_o in H0. inversion H0; subst. 
+        exists (g0, f, M.add x (time + 1) f_times, d_times, time + 1, remain_d, S.remove x remain_f, tl, x :: l).
+        split. apply multi_refl. simpl. split. reflexivity. split. eapply step'. apply H. apply H1.
+        rewrite P.F.add_eq_o. reflexivity. reflexivity. reflexivity.
+      * rewrite P.F.add_neq_o in H0. apply IHvalid_topo_state in H0. destruct_all. exists x0.
+        split. eapply multi_trans. apply H0. apply multi_R. apply H1. split. apply H5. split. apply H6.
+         apply H7. intuition. 
+Qed.
+
 Lemma valid_begins_with_start': forall s g o,
   valid_topo_state s g o ->
   dfs_multi' (start_state' g o) s.
@@ -437,6 +460,19 @@ Definition times_function := G.vertex -> nat.
     pose proof (all_times_when_done (get_state x) g o v H1 e H). destruct_all.
     pose proof (discovery_time_means_discovered' x g o v x1 H0 H2). destruct_all.
     exists (exist _ x2 H6). simpl. rewrite H2. symmetry. apply H5.
+  Qed.
+
+  Lemma finish_exists: forall o g v,
+    G.contains_vertex g v = true ->
+    exists (s: state o g), time_of_state o g s = f_time o g v.
+  Proof.
+    intros. unfold f_time. unfold time_of_state. destruct (end_state g o).
+    destruct_all; simpl in *. 
+    assert (valid_topo_state x g o). eapply multistep_preserves_valid'. apply start'.
+    apply d. assert (valid_dfs_state (get_state x) g o). eapply valid_state_equiv. apply H0.
+    pose proof (all_times_when_done (get_state x) g o v H1 e H). destruct_all.
+    pose proof (finish_time_means_finished' x g o v x0 H0 H3). destruct_all.
+    exists (exist _ x2 H6). simpl. rewrite H3. symmetry. apply H5.
   Qed.
 
   Definition white o g (s: state o g)(v: G.vertex) : bool :=

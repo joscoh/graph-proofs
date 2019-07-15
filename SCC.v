@@ -10,7 +10,6 @@ Require Import Coq.Arith.PeanoNat.
 Require Import Omega.
 Require Import Coq.FSets.FSetProperties.
 Require Import DerivedProofs.
-(*Require Import DerivedProofs.*)
 
 Module SCC(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase).
 
@@ -91,7 +90,41 @@ Module SCC(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest
           -- auto. }
       apply (H5 x0); assumption.
   Qed.
-  
+
+
+(*Any path between 2 vertices in an SCC must consist of vertices entirely within the SCC*)
+Lemma scc_path_within: forall g C u v l,
+  scc C g ->
+  S.In u C ->
+  S.In v C ->
+  Pa.path_list_rev g u v l = true ->
+  (forall x, In x l -> S.In x C).
+Proof.
+  intros. destruct (P2.In_dec x C). apply i.
+  unfold scc in H. destruct H. unfold strongly_connected in H. destruct_all.
+  assert (strongly_connected (S.add x C) g). { unfold strongly_connected. split.
+  apply add_empty. split.
+  - intros. destruct (O.eq_dec x0 x). 
+    + unfold O.eq in e. subst. eapply Pa.path_implies_in_graph in H2. destruct_all. apply H9.
+      apply H3.
+    + apply S.add_3 in H7. apply H5. apply H7. auto.
+  - intros. destruct (O.eq_dec x y).
+    + unfold O.eq in e. subst. apply S.add_3 in H7.
+      apply in_split_app_fst in H3. destruct_all. clear H10. subst.
+      apply Pa.path_app in H2. destruct_all.
+      destruct (O.eq_dec x0 u). unfold O.eq in e. subst. rewrite Pa.path_path_list_rev.
+      exists x1. apply H3. eapply Pa.path_trans. apply (H6 _ u); try(assumption).
+      rewrite Pa.path_path_list_rev. exists x1. apply H3. apply O.eq_dec. auto.
+    + apply S.add_3 in H8. destruct (O.eq_dec x0 x).
+      * unfold O.eq in e. subst. eapply in_split_app_fst in H3. destruct_all. subst. clear H10.
+        apply Pa.path_app in H2. destruct_all. destruct (O.eq_dec v y). unfold O.eq in e. subst.
+        rewrite Pa.path_path_list_rev. exists x0. apply H2. 
+        eapply Pa.path_trans. rewrite Pa.path_path_list_rev. exists x0. apply H2. apply H6; try(assumption).
+        apply O.eq_dec.
+      * apply S.add_3 in H7. apply H6. apply H7. apply H8. auto. auto.
+      * auto. }
+  exfalso. apply (H4 x); assumption.
+Qed.
 
 (** Correctness of SCC algorithm **)
 
@@ -107,28 +140,21 @@ Lemma scc_path_one_dir: forall g C C' u v u' v',
   Pa.path g u u' ->
   ~Pa.path g v' v.
 Proof.
-  intros. intro. assert (~S.In u C'). eapply neq_scc_disjoint in H1. intro. apply H1.
-  split. apply H2. apply H8. apply H. apply H0.
-  assert (strongly_connected (S.add u C') g). {
-  unfold scc in H. unfold scc in H0. destruct_all. unfold strongly_connected in H.
-  unfold strongly_connected in H0. destruct_all. unfold strongly_connected. split. apply add_empty. split.
-  - intros. destruct (O.eq_dec x u). unfold O.eq in e. subst. apply H13. apply H2.
-    rewrite P2.FM.add_neq_iff in H15. apply H11. apply H15. auto. 
-  - intros. destruct (O.eq_dec x u).
-    + unfold O.eq in e. subst. rewrite P2.FM.add_neq_iff in H16.
-      destruct (O.eq_dec u' y). unfold O.eq in e. subst. apply H6.
-      eapply Pa.path_trans. apply H6. apply H12; try(assumption). apply H17.
-    + rewrite P2.FM.add_neq_iff in H15. destruct (O.eq_dec y u).
-      * unfold O.eq in e. subst. destruct (O.eq_dec x v'). unfold O.eq in e. subst.
-        destruct (O.eq_dec u v). unfold O.eq in e. subst. apply H7.
-        eapply Pa.path_trans. apply H7. apply H14; try(assumption). auto.
-        eapply Pa.path_trans. apply H12. apply H15. apply H5. auto.
-        destruct (O.eq_dec u v). unfold O.eq in e. subst. apply H7.
-        eapply Pa.path_trans. apply H7. apply H14; try(assumption). auto.
-      * rewrite P2.FM.add_neq_iff in H16. apply H12; try(assumption). auto.
-      * auto. }
-  unfold scc in H0. destruct H0. apply (H10 u); assumption.
+  intros. intro. rewrite Pa.path_path_list_rev in H6.
+  rewrite Pa.path_path_list_rev in H7. destruct_all.
+  assert (A:= H0).
+  unfold scc in H0. destruct H0. unfold strongly_connected in H0. destruct_all.
+  destruct (O.eq_dec u' v'). unfold O.eq in e. subst.
+  assert (Pa.path_list_rev g u v (x ++ v' :: x0) = true). apply Pa.path_app. split; assumption.
+  assert (S.In v' C). eapply scc_path_within. apply H. apply H2. apply H3. apply H11. solve_in.
+  eapply neq_scc_disjoint in H1. apply H1. split. apply H12. apply H4. apply H. apply A.
+  assert (Pa.path g u' v'). apply H10; try(assumption). rewrite Pa.path_path_list_rev in H11. destruct H11.
+  assert (Pa.path_list_rev g u v (x ++ v' :: x1 ++ u' :: x0) = true). apply Pa.path_app. split. apply H7.
+  apply Pa.path_app. split. apply H11. apply H6. assert (S.In v' C). eapply scc_path_within. apply H.
+  apply H2. apply H3. apply H12. solve_in. eapply neq_scc_disjoint in H1. apply H1. split. 
+  apply H13. apply H5. apply H. apply A.
 Qed.
+
 
 (** Results about times of 1st DFS Pass **)
 Module D1 := (D O S G F).
@@ -326,6 +352,7 @@ Qed.
 Definition f_time_scc g c (H: scc c g) :=
   max_elt_set c (D1.f_time None g).
 
+(*This is a consequence of either my poor planning or a not optimal use of modules*)
 Lemma path_module_equiv: forall g x y,
   Pa.path g x y <-> D1.P.path g x y.
 Proof.
@@ -336,9 +363,15 @@ Proof.
   - eapply Pa.p_continue. apply IHpath. apply H0.
 Qed. 
 
-(*TODO: Prove that SCC implies a path entirely within the SCC and a path entirely within with unique vertices
-  ie: know unique from derived, then show within because if out, then get bigger SCC*)
+Lemma path_module_equiv_2: forall g x y l,
+  D1.P.path_list_rev g x y l = true <-> Der1.P.path_list_rev g x y l = true.
+Proof.
+  intros.  split; intros; induction l; simpl in *; simplify.
+Qed.
 
+(*A major lemma in establishing the correctness of the SCC algorithm: If we have two disctinct SCCs C and C' and
+  there is an edge from C to C', then f(C) > f(C') (implies that the SCC with largest finish times is a source
+  node in G^SCC*)
 (*Lemma 22.14 in CLRS*)
 Lemma scc_finish_time: forall g c c' u v (Hc: scc c g) (Hc': scc c' g) x y,
   S.equal c c' = false ->
@@ -357,6 +390,7 @@ Proof.
   (*Proof- at time d[x0] all vertices in c' are white, so all descendants of x0, so x0 finishes after all of them,
     so x0 = y*)
   assert (S.In x0 c'). { unfold d_time_scc in H6. apply min_elt_set_in_set in H6. apply H6. }
+  assert (A:= Hc). assert (B:= Hc').
   unfold scc in Hc. unfold scc in Hc'. destruct Hc. destruct_all.
   unfold strongly_connected in s0. unfold strongly_connected in s. destruct_all.
   assert (G.contains_vertex g x0 = true). apply e0. apply H8. 
@@ -366,17 +400,135 @@ Proof.
    eapply min_elt_set_finds_min in H6. rewrite <- H10 in H6. apply H6. intros.
   eapply D1.d_times_unique. apply e0. apply H13. apply e0. apply H14. apply H15.
   apply H11. apply H12. }
-  assert (forall v, S.In v c' -> v <> x0 -> exists l, D1.P.path_list_ind g x0 v (fun x => D1.white None g s v) l). {
-  intros. apply (p x0) in H12. rewrite path_module_equiv in H12. rewrite D1.P.path_path_list_rev in H12.
-  destruct H12 as [l]. exists l. rewrite D1.P.path_list_ind_rev. split. apply H12.
-  split. intros. apply H11. (*need to know all vertices on path in SCC and might need path with no cycles - can
-  prove from reachable I think because that cannot have a cycle*)
-
-(*next steps: do same for max, define f_time, then prove lemma 22.14*)
-(*it would be really nice to prove this lemma, although it is ok if I dont finish today*)
-  
-
-  
+  assert (forall v, S.In v c' -> v <> x0 -> exists l, D1.P.path_list_ind g x0 v (fun x => D1.white None g s x) l). {
+  intros. assert (C:=H12). apply (p x0) in H12. rewrite path_module_equiv in H12. 
+  rewrite D1.P.path_path_list_rev in H12.
+  destruct H12 as [l]. assert (exists l, D1.P.path_list_rev g x0 v0 l = true). exists l. apply H12.
+  apply Der1.unique_paths in H14. destruct_all. exists x2. rewrite D1.P.path_list_ind_rev. split.
+  apply H14. split. intros. eapply scc_path_within in H14. apply H11. apply H14. auto. intro. subst. contradiction.
+  assumption. assumption. assumption. assumption. apply H11. assumption. assumption. auto. assumption. auto. }
+  assert (forall v, S.In v c' -> v <> x0 -> F.desc (D1.dfs_forest None g) x0 v). intros. apply D1.white_path_theorem.
+  apply e0. apply H8. intros. 
+  assert (s = s0). eapply D1.state_time_unique. omega. subst. apply H12; try(assumption).
+  assert (x0 = y). { destruct (O.eq_dec x0 y). apply e3. assert (D1.f_time None g x0 < D1.f_time None g y).
+  unfold f_time_scc in H4. eapply max_elt_set_finds_max in H4. apply H4. intros.
+  eapply D1.f_times_unique. apply e0. apply H14. apply e0. apply H15. rewrite H16. reflexivity. apply H8.
+   auto. assert (F.desc (D1.dfs_forest None g) x0 y). apply H13. eapply max_elt_set_in_set. unfold f_time_scc in H4.
+   apply H4. auto. rewrite D1.descendant_iff_interval in H15. omega. apply e0. apply H8. apply e0.
+  eapply max_elt_set_in_set. unfold f_time_scc in H4. apply H4. }
+  subst. (*Now we know that start and finish vertex are the same, need to show that all vertices in c are white
+  when y finishes*)
+  pose proof (D1.finish_exists None g y H9). destruct H14 as [s']. 
+  assert (forall x, S.In x c -> D1.white None g s' x = true). { intros.
+  assert (D1.white None g s x0 = true). rewrite D1.white_def. rewrite H10. destruct (O.eq_dec x0 x1).
+  unfold O.eq in e3. subst. rewrite Nat.ltb_lt. omega. unfold d_time_scc in H5.
+  eapply min_elt_set_finds_min in H5. assert ( D1.d_time None g x1 < D1.d_time None g x0). apply H5.
+  rewrite Nat.ltb_lt. omega. intros. eapply D1.d_times_unique. apply e2. assumption. apply e2. assumption.
+  rewrite H18. reflexivity. assumption. apply n1. 
+  pose proof (Der1.color_total g None s' x0). destruct H17. apply H17. destruct H17.
+  - rewrite D1.gray_def in H17. simplify. rewrite H14 in H18. rewrite H14 in H19.
+    rewrite D1.white_def in H16. rewrite H10 in H16. 
+    assert (G.contains_vertex g x0 = true). apply e2. apply H15.
+    assert (y <> x0). intro. subst. eapply neq_scc_disjoint in H. apply H. split. apply H15. assumption.
+    apply A. assumption.
+    pose proof (D1.parentheses_theorem None g y x0 H9 H17 H20). rewrite Nat.ltb_lt in H16.
+    rewrite Nat.ltb_lt in H18. rewrite Nat.leb_le in H19. omega.
+  - rewrite D1.white_def in H16. rewrite D1.black_def in H17. rewrite H10 in H16. rewrite H14 in H17.
+    rewrite Nat.ltb_lt in H16. rewrite Nat.leb_le in H17. assert (y <> x0). intro. subst.
+    eapply neq_scc_disjoint in H. apply H. split. apply H15. assumption. apply A. assumption.
+    assert ((D1.f_time None g x0 = D1.f_time None g y) \/ (D1.f_time None g x0 < D1.f_time None g y)) by omega.
+    destruct H19. assert (y = x0). eapply D1.f_times_unique. apply H9. apply e2. apply H15.
+    rewrite <- H19. reflexivity. subst. contradiction. clear H17.
+    assert (F.desc (D1.dfs_forest None g) y x0). eapply D1.descendant_iff_interval. apply H9.
+    apply e2. apply H15.   pose proof (Der1.discover_before_finish g None y x0). 
+    assert (  D1.d_time None g y < D1.f_time None g y). apply H17; try(assumption); try(auto). 
+    pose proof (Der1.discover_before_finish g None x0 y). 
+    assert (D1.d_time None g x0 < D1.f_time None g x0). apply H21; try(assumption); try(auto). omega.
+    eapply D1.white_path_theorem in H17. destruct H17 as [l]. rewrite D1.P.path_list_ind_rev in H17. destruct_all.
+    destruct (O.eq_dec x0 u). unfold O.eq in e3. subst.
+    destruct (O.eq_dec v y). unfold O.eq in e3. subst.
+    assert (D1.P.path_list_rev g y y (u :: l) = true). simpl. simplify.
+    assert (S.In u c'). eapply scc_path_within. apply B. apply H2. apply H2. apply H22. solve_in.
+    exfalso. eapply neq_scc_disjoint in H. apply H. split. apply H15. apply H23. apply A. apply B.
+    assert (Pa.path g v y). apply p. assumption. assumption. auto. rewrite path_module_equiv in H22.
+    rewrite D1.P.path_path_list_rev in H22. destruct H22 as [l'].
+    assert (D1.P.path_list_rev g y y (l' ++ v :: u :: l) = true). apply D1.P.path_app. split. apply H22.
+    simpl. simplify. assert (S.In u c').  eapply scc_path_within. apply B. apply H8. apply H8. apply H23.
+    apply in_or_app. right. simpl. right. left. reflexivity. exfalso. 
+    eapply neq_scc_disjoint in H. apply H. split. apply H15. apply H24. apply A. apply B.
+    assert (Pa.path g x0 u). apply p0; try(assumption); try(auto). rewrite path_module_equiv in H22.
+    rewrite D1.P.path_path_list_rev in H22. destruct H22 as [l''].
+    assert (D1.P.path_list_rev g y v (u :: l'' ++ x0 :: l) = true). simpl. simplify. apply D1.P.path_app.
+    simplify. assert (S.In u c'). eapply scc_path_within. apply B. apply H8. apply H2. apply H23. solve_in.
+    exfalso. eapply neq_scc_disjoint in H. apply H. split. apply H1. apply H24. apply A. apply B.
+    apply H9. apply H10. } assert (D1.white None g s' x = true). apply H15.
+    unfold f_time_scc in H3. eapply max_elt_set_in_set in H3. apply H3. rewrite D1.white_def in H16.
+    rewrite H14 in H16. rewrite Nat.ltb_lt in H16. 
+    pose proof (Der1.discover_before_finish g None x y).
+    assert (D1.d_time None g x < D1.f_time None g x). apply H17. apply e2. unfold f_time_scc in H3.
+    eapply max_elt_set_in_set in H3. apply H3. apply H9. intro. subst.
+    eapply neq_scc_disjoint in H. apply H. split. unfold f_time_scc in H3.
+    eapply max_elt_set_in_set in H3. apply H3. apply H8. apply A. apply B. omega.
+    (*WOOO *)
+    destruct H7. assert (A:= Hc). assert (B:= Hc'). unfold scc in Hc. unfold scc in Hc'.
+    destruct_all. unfold strongly_connected in s0. unfold strongly_connected in s. destruct_all.
+    unfold f_time_scc in *. unfold d_time_scc in *.
+    (*Proof: there is a white path to every vertex in c', so all must finish before*)
+    pose proof (D1.discovery_exists None g x1). destruct H8 as [s]. apply e2. 
+    eapply  min_elt_set_in_set. apply H5.
+    assert (forall x, S.In x c -> x1 <> x -> D1.white None g s x = true). {
+    intros. rewrite D1.white_def. rewrite H8. rewrite Nat.ltb_lt. eapply min_elt_set_finds_min. intros.
+    eapply D1.d_times_unique. apply e2. apply H11. apply e2. apply H12. rewrite H13. reflexivity. apply H5.
+    apply H9. auto. }
+    assert (forall x, S.In x c' -> D1.white None g s x = true). { intros. rewrite D1.white_def. rewrite H8.
+    destruct (O.eq_dec x2 x0). unfold O.eq in e3. subst. rewrite Nat.ltb_lt. apply H7. rewrite Nat.ltb_lt.
+    assert (D1.d_time None g x0 < D1.d_time None g x2). eapply min_elt_set_finds_min. intros.
+    eapply D1.d_times_unique. apply e0. apply H11. apply e0. apply H12. rewrite H13. reflexivity.
+    apply H6. apply H10. auto. omega. }
+    assert (forall x, S.In x c' -> exists l, D1.P.path_list_ind g x1 x (fun y => D1.white None g s y) l). {
+    intros. destruct (O.eq_dec x1 u). unfold O.eq in e3. subst. destruct (O.eq_dec x2 v). unfold O.eq in e3.
+    subst. exists nil. constructor. apply H0. apply H10. apply H2. 
+    assert (Pa.path g v x2). apply p. apply H2. apply H11. auto. rewrite path_module_equiv in H12.
+    rewrite D1.P.path_path_list_rev in H12. destruct H12 as [l]. exists (l ++ v :: nil).
+    rewrite D1.P.path_list_ind_rev. split. apply D1.P.path_app. simplify. split. intros.
+    apply in_app_or in H13. destruct H13. apply H10. eapply scc_path_within in H12. apply H12.
+    apply B. apply H2. apply H11. apply H13. simpl in H13. destruct H13. subst. apply H10. apply H2.
+    destruct H13. apply H10. apply H11. assert (I: S.In x1 c). eapply min_elt_set_in_set. apply H5. 
+    assert (Pa.path g x1 u). apply p0. apply I. apply H1. auto. rewrite path_module_equiv in H12.
+    rewrite D1.P.path_path_list_rev in H12. eapply Der1.unique_paths in H12. destruct H12 as [l].
+    destruct_all. destruct (O.eq_dec v x2). unfold O.eq in e3. subst. exists (u :: l). 
+    rewrite D1.P.path_list_ind_rev. split. simpl. simplify. split. intros.
+    simpl in H16. destruct H16. subst. apply H9. assumption. auto. 
+    apply H9. eapply scc_path_within. apply A. apply I. apply H1. apply H12. apply H16. intro. subst.
+    contradiction. apply H10. apply H11. 
+    assert (Pa.path g v x2). apply p; try(assumption); try(auto). rewrite path_module_equiv in H16.
+    rewrite D1.P.path_path_list_rev in H16. destruct H16 as [l'].
+    exists (l' ++ v :: u :: l). rewrite D1.P.path_list_ind_rev. split. 
+    apply D1.P.path_app. split. apply H16. simpl. simplify. split. intros.
+    apply in_app_or in H17. destruct H17. apply H10. eapply scc_path_within. apply B.
+    apply H2. apply H11. apply H16. apply H17. simpl in H17. destruct H17. subst.
+    apply H10. apply H2. destruct H17. subst. apply H9. apply H1. auto.
+    apply H9. eapply scc_path_within. apply A. apply I. apply H1. apply H12. apply H17.
+    intro. subst. contradiction. apply H10. apply H11. auto. }
+    assert (forall x, S.In x c' ->  F.desc (D1.dfs_forest None g) x1 x). intros.
+    eapply D1.white_path_theorem. apply e2. eapply min_elt_set_in_set. apply H5.
+    intros. assert (s0 = s). eapply D1.state_time_unique. omega. subst.
+    apply H11. apply H12. assert (F.desc (D1.dfs_forest None g) x1 y). apply H12.
+    eapply max_elt_set_in_set. apply H4. rewrite D1.descendant_iff_interval in H13.
+    destruct (O.eq_dec x x1). unfold O.eq in e3. subst. omega.
+    assert (D1.f_time None g x1 < D1.f_time None g x). eapply max_elt_set_finds_max in H3.
+    apply H3. intros. eapply D1.f_times_unique. apply e2. apply H14. apply e2. apply H15.
+    rewrite H16. reflexivity. eapply min_elt_set_in_set. apply H5. auto. omega.
+    apply e2. eapply min_elt_set_in_set. apply H5. eapply e0. 
+    eapply max_elt_set_in_set. apply H4. assert (A:= Hc). assert (B:= Hc').
+    unfold scc in Hc. unfold scc in Hc'. destruct_all. unfold strongly_connected in s0.
+    unfold strongly_connected in s. unfold f_time_scc in *. unfold d_time_scc in *.
+    destruct_all. assert (x1 = x0). eapply D1.d_times_unique. apply H12.
+    eapply min_elt_set_in_set. apply H5. apply H9. eapply min_elt_set_in_set. apply H6.
+    rewrite H7. reflexivity. subst. eapply neq_scc_disjoint in H. exfalso. apply H.
+    split. eapply min_elt_set_in_set. apply H5. eapply min_elt_set_in_set. apply H6.
+    apply A. apply B.
+Qed.
 
 
 
