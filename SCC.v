@@ -352,7 +352,7 @@ Qed.
 Definition f_time_scc g c (H: scc c g) :=
   max_elt_set c (D1.f_time None g).
 
-(*This is a consequence of either my poor planning or a not optimal use of modules*)
+(*This is a consequence of either my poor planning or a less than optimal use of modules*)
 Lemma path_module_equiv: forall g x y,
   Pa.path g x y <-> D1.P.path g x y.
 Proof.
@@ -363,13 +363,7 @@ Proof.
   - eapply Pa.p_continue. apply IHpath. apply H0.
 Qed. 
 
-Lemma path_module_equiv_2: forall g x y l,
-  D1.P.path_list_rev g x y l = true <-> Der1.P.path_list_rev g x y l = true.
-Proof.
-  intros.  split; intros; induction l; simpl in *; simplify.
-Qed.
-
-(*A major lemma in establishing the correctness of the SCC algorithm: If we have two disctinct SCCs C and C' and
+(*A major lemma in establishing the correctness of the SCC algorithm: If we have two distinct SCCs C and C' and
   there is an edge from C to C', then f(C) > f(C') (implies that the SCC with largest finish times is a source
   node in G^SCC*)
 (*Lemma 22.14 in CLRS*)
@@ -529,6 +523,8 @@ Proof.
     split. eapply min_elt_set_in_set. apply H5. eapply min_elt_set_in_set. apply H6.
     apply A. apply B.
 Qed.
+
+End SCC.
 
 
 
