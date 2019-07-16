@@ -3,10 +3,11 @@ Helper.v
 Graph.v
 AdjacencyMap.v
 Path.v
+SCCDef.v
 Forest.v
 DFSSpec.v
 DerivedProofs.v
+SCCAlg.v
 DFS.v
 DFSCycle.v
 DFSTopoSort.v
-SCC.v

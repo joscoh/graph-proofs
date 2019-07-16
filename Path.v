@@ -231,11 +231,37 @@ Proof.
     - exists l. split; assumption.
 Qed.
 
-
-
+(*If there is a path, then there is a path with no duplicates*)
+Lemma path_no_dups: forall g u v l,
+  path_list_rev g u v l = true ->
+  exists l1, path_list_rev g u v l1 = true /\ NoDup l1 /\ ~In u l1 /\  ~In v l1 /\ 
+  (forall x, In x l1 -> In x l). 
+  Proof.
+    intros. induction l using (well_founded_induction
+                       (wf_inverse_image _ nat _ (@length _)
+                          PeanoNat.Nat.lt_wf_0)).
+    destruct (NoDup_dec (O.eq_dec) l).
+    - destruct (In_dec O.eq_dec u l).
+      + eapply in_split_app_fst in i. destruct_all. clear H2. subst.
+        apply path_app in H. destruct H. specialize (H0 x). destruct H0 as [l]. 
+        rewrite app_length. simpl. assert (forall n m, n < n + S(m)) by (intros; omega). apply H0.
+        apply H. exists l. simplify. apply O.eq_dec.
+      + destruct (In_dec O.eq_dec v l).
+        * eapply in_split_app_fst in i. destruct_all; subst. clear H2. apply path_app in H.
+          destruct H. specialize (H0 x0). destruct H0 as [l]. rewrite app_length. simpl.
+          assert (forall n m, n < m + S(n)) by (intros; omega). apply H0. apply H1. exists l.
+          simplify. apply O.eq_dec.
+        * exists l. simplify.
+    - rewrite no_no_dup in n. destruct_all. subst. 
+      apply path_remove_cycle in H. specialize (H0 (x0 ++ x :: x2)). destruct H0 as [l].
+      repeat(rewrite app_length; simpl). omega. apply H. exists l. simplify. apply H5 in H4.
+      apply in_app_or in H4. destruct H4. apply in_or_app. left. apply H4. simpl in H4.
+      destruct H4. subst. solve_in. solve_in. apply O.eq_dec.
+Qed.
 
 (*A crucial lemma for proving the correctness of cycle detection: If there is a cycle that does not
-  consist solely of the same vertex, then there is a cycle with no duplicates*)
+  consist solely of the same vertex, then there is a cycle with no duplicates
+TODO: see if I can prove this from path_no_dups*)
 Lemma cycle_no_dups_strong: forall g u l,
   path_list_rev g u u l = true ->
   (exists w, In w l /\ w <> u) ->
@@ -280,6 +306,90 @@ Proof.
   apply in_app_or in H9. simpl in H9. destruct H9. apply in_or_app. left. apply H9.
   destruct H9. subst. solve_in. solve_in.  apply O.eq_dec.
 Qed. 
+
+(** Decidability of [path] **)
+
+(*We want to be able to use the existence of a path as a boolean in other functions, so we need to show that
+  it is decidable. To do this, we give a (very inefficient) algorithm to find a path and prove it correct.
+  But we are only concerned with existence so its efficiency is not important*)
+
+(*A terrible function to find if a path of length <= n between two vertices exists*)
+Fixpoint path_of_length g (u v : G.vertex) (n: nat) {struct n} : bool :=
+  match n with
+  | 0 => G.contains_edge g u v
+  | S(m) => if G.contains_edge g u v then true else
+  fold_right (fun x t => if path_of_length g u x m && G.contains_edge g x v then true else t) false 
+  (G.list_of_graph g)
+  end.
+
+(*If this function returns true, there is a path between two vertices *)
+Lemma path_of_length_implies_path: forall g u v n,
+  path_of_length g u v n = true -> path g u v.
+Proof.
+  intros. generalize dependent v. induction n; intros.
+  - simpl in H. constructor. apply H.
+  - simpl in *. destruct (G.contains_edge g u v) eqn : ?.
+    + apply p_start. apply Heqb.
+    + assert (forall l, fold_right
+      (fun (x : G.vertex) (t : bool) => if path_of_length g u x n && G.contains_edge g x v then true else t) false
+      l = true-> exists x, In x l /\ path_of_length g u x n = true /\ G.contains_edge g x v = true). {
+      intros. induction l; simpl in *.
+      * inversion H0.
+      * destruct (path_of_length g u a n && G.contains_edge g a v) eqn : ?.
+        -- simplify. exists a. simplify. 
+        -- apply IHl in H0. destruct_all. exists x. simplify. }
+      apply H0 in H. destruct_all. eapply p_continue. apply IHn. apply H1. apply H2.
+Qed. 
+
+Lemma path_of_size_implies_function: forall g u v l n,
+  length l <= n ->
+  path_list_rev g u v l = true -> path_of_length g u v n = true.
+Proof.
+  intros. generalize dependent v. revert u. generalize dependent n. induction l; simpl in *; intros.
+  - destruct n. simpl. apply H0. simpl. rewrite H0. reflexivity.
+  - simplify. destruct n. omega. assert (length l <= n) by omega. clear H.
+    simpl. destruct (G.contains_edge g u v) eqn : ?. reflexivity.
+      assert (forall a l', In a l' ->
+      path_of_length g u a n = true ->
+      G.contains_edge g a v = true ->
+      fold_right
+  (fun (x : G.vertex) (t : bool) => if path_of_length g u x n && G.contains_edge g x v then true else t)
+  false l' = true). { intros. induction l'; simpl in *.
+  - destruct H.
+  - destruct H. subst. rewrite H3. rewrite H4. simpl. reflexivity. apply IHl' in H. 
+    destruct (path_of_length g u a1 n && G.contains_edge g a1 v). reflexivity. apply H. }
+    apply (H a). apply G.list_of_graph_1. eapply G.contains_edge_1. apply H1. apply IHl. apply H0. apply H2.
+    apply H1. 
+Qed.
+
+(*If there is a path, then there is a path at most as large as the number of vertices in the graph (because
+  there is a path with no duplicates and every vertex is in the graph*)
+Lemma path_shorter_than_graph_size: forall g u v l,
+  path_list_rev g u v l = true ->
+  exists l', path_list_rev g u v l' = true /\ length l' <= length(G.list_of_graph g).
+Proof.
+  intros. apply path_no_dups in H. destruct_all. 
+  assert (forall a, In a x -> In a (G.list_of_graph g)). intros.
+  apply path_implies_in_graph in H. destruct_all. apply H6 in H4. apply G.list_of_graph_1. apply H4.
+  exists x. split. apply H. eapply NoDup_incl_length. apply H0. unfold incl. apply H4.
+Qed.
+
+Lemma path_equiv: forall g u v,
+  path g u v <-> path_of_length g u v (length(G.list_of_graph g)) = true.
+Proof.
+  intros. split; intros.
+  - rewrite path_path_list_rev in H. destruct H. apply path_shorter_than_graph_size in H.
+    destruct_all. eapply path_of_size_implies_function. apply H0. apply H.
+  - eapply path_of_length_implies_path. apply H.
+Qed.
+
+Lemma path_dec: forall g u v,
+  {path g u v} + {~path g u v}.
+Proof.
+  intros. destruct (path_of_length g u v (length(G.list_of_graph g))) eqn : ?.
+  left. apply path_equiv; assumption.
+  right. intro. apply path_equiv in H. rewrite H in Heqb. inversion Heqb.
+Qed.
   
 
 

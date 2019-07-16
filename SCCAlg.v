@@ -10,121 +10,16 @@ Require Import Coq.Arith.PeanoNat.
 Require Import Omega.
 Require Import Coq.FSets.FSetProperties.
 Require Import DerivedProofs.
+Require Import SCCDef.
 
-Module SCC(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase).
+Module SCCAlg(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase).
 
   Module Pa := (Path.PathTheories O S G).
   Module P2 := FSetProperties.WProperties_fun O S.
   Module O2 := OrderedTypeFacts O.
   Module SN := Helper.SetNeq O S.
-  (*Module De := (DerivedProofs.DerivedProofs O S G F D).*)
-
-  (*A set of vertices is strongly connected if every vertex in the set is in the graph and if there is a path
-    between any two vertices in the set*)
-  Definition strongly_connected(C: S.t)(g: G.graph) :=
-    S.is_empty C = false /\
-    (forall x, S.In x C -> G.contains_vertex g x = true) /\
-    (forall x y, S.In x C -> S.In y C -> x <> y -> Pa.path g x y).
-  
-  (*A strongly connected component is a maximal strongly connected set*)
-  Definition scc(C: S.t) (g: G.graph) :=
-    strongly_connected C g /\ (forall x, ~ S.In x C -> ~strongly_connected (S.add x C) g).
-
-  Lemma add_empty: forall x s,
-    S.is_empty (S.add x s) = false.
-  Proof.
-    intros. destruct (S.is_empty (S.add x s)) eqn : ?.
-    - apply S.is_empty_2 in Heqb. apply P2.empty_is_empty_1 in Heqb. unfold S.Equal in Heqb.
-      specialize (Heqb x). assert (S.In x S.empty). apply Heqb. apply S.add_1. reflexivity.
-      rewrite P2.Dec.F.empty_iff in H. destruct H.
-    - reflexivity.
-  Qed.
-
-  (*Any two unequal SCCs are disjoint*)
-  Lemma neq_scc_disjoint: forall g C1 C2,
-    scc C1 g ->
-    scc C2 g ->
-    S.equal C1 C2 = false ->
-    (forall x, ~(S.In x C1 /\ S.In x C2)).
-  Proof.
-    intros. intro. destruct H2. apply SN.unequal_sets in H1. unfold scc in H. unfold scc in H0.
-    destruct_all. unfold strongly_connected in H. unfold strongly_connected in H0. destruct_all.
-    destruct H1; destruct_all.
-    - destruct (O.eq_dec x x0). unfold O.eq in e. subst. contradiction.
-      assert (strongly_connected (S.add x0 C2) g). { unfold strongly_connected. split. apply add_empty.
-      split.
-      + intros. destruct (O.eq_dec x0 x1). unfold O.eq in e. subst. apply H8. apply H1.
-        rewrite P2.FM.add_neq_iff in H11. apply H6. apply H11. apply n0.
-      + intros.  destruct (O.eq_dec x0 y).
-        * unfold O.eq in e. subst. rewrite P2.FM.add_neq_iff in H11.
-          destruct (O.eq_dec x1 x).
-          -- unfold O.eq in e. subst. apply H9; try(assumption).
-          -- assert (Pa.path g x1 x). apply H7; try(assumption).
-             eapply Pa.path_trans. apply H14. apply H9;try(assumption).
-          -- auto.
-        * rewrite P2.FM.add_neq_iff in H12. destruct (O.eq_dec x1 x0).
-          -- unfold O.eq in e. subst. destruct (O.eq_dec x y).
-             ++ unfold O.eq in e. subst. apply H9; try(assumption).
-             ++ assert (Pa.path g x0 x). apply H9; try(assumption). auto.
-                eapply Pa.path_trans. apply H14. apply H7; try(assumption).
-          -- rewrite P2.FM.add_neq_iff in H11. apply H7; try(assumption). auto.
-          -- auto. }
-      apply (H4 x0); assumption.
-   - destruct (O.eq_dec x x0). unfold O.eq in e. subst. contradiction.
-      assert (strongly_connected (S.add x0 C1) g). { unfold strongly_connected. split. apply add_empty. split.
-      + intros. destruct (O.eq_dec x0 x1). unfold O.eq in e. subst. apply H6. apply H10.
-        rewrite P2.FM.add_neq_iff in H11. apply H8. apply H11. apply n0.
-      + intros.  destruct (O.eq_dec x0 y).
-        * unfold O.eq in e. subst. rewrite P2.FM.add_neq_iff in H11.
-          destruct (O.eq_dec x1 x).
-          -- unfold O.eq in e. subst. apply H7; try(assumption).
-          -- assert (Pa.path g x1 x). apply H9; try(assumption).
-             eapply Pa.path_trans. apply H14. apply H7;try(assumption).
-          -- auto.
-        * rewrite P2.FM.add_neq_iff in H12. destruct (O.eq_dec x1 x0).
-          -- unfold O.eq in e. subst. destruct (O.eq_dec x y).
-             ++ unfold O.eq in e. subst. apply H7; try(assumption).
-             ++ assert (Pa.path g x0 x). apply H7; try(assumption). auto.
-                eapply Pa.path_trans. apply H14. apply H9; try(assumption).
-          -- rewrite P2.FM.add_neq_iff in H11. apply H9; try(assumption). auto.
-          -- auto. }
-      apply (H5 x0); assumption.
-  Qed.
-
-
-(*Any path between 2 vertices in an SCC must consist of vertices entirely within the SCC*)
-Lemma scc_path_within: forall g C u v l,
-  scc C g ->
-  S.In u C ->
-  S.In v C ->
-  Pa.path_list_rev g u v l = true ->
-  (forall x, In x l -> S.In x C).
-Proof.
-  intros. destruct (P2.In_dec x C). apply i.
-  unfold scc in H. destruct H. unfold strongly_connected in H. destruct_all.
-  assert (strongly_connected (S.add x C) g). { unfold strongly_connected. split.
-  apply add_empty. split.
-  - intros. destruct (O.eq_dec x0 x). 
-    + unfold O.eq in e. subst. eapply Pa.path_implies_in_graph in H2. destruct_all. apply H9.
-      apply H3.
-    + apply S.add_3 in H7. apply H5. apply H7. auto.
-  - intros. destruct (O.eq_dec x y).
-    + unfold O.eq in e. subst. apply S.add_3 in H7.
-      apply in_split_app_fst in H3. destruct_all. clear H10. subst.
-      apply Pa.path_app in H2. destruct_all.
-      destruct (O.eq_dec x0 u). unfold O.eq in e. subst. rewrite Pa.path_path_list_rev.
-      exists x1. apply H3. eapply Pa.path_trans. apply (H6 _ u); try(assumption).
-      rewrite Pa.path_path_list_rev. exists x1. apply H3. apply O.eq_dec. auto.
-    + apply S.add_3 in H8. destruct (O.eq_dec x0 x).
-      * unfold O.eq in e. subst. eapply in_split_app_fst in H3. destruct_all. subst. clear H10.
-        apply Pa.path_app in H2. destruct_all. destruct (O.eq_dec v y). unfold O.eq in e. subst.
-        rewrite Pa.path_path_list_rev. exists x0. apply H2. 
-        eapply Pa.path_trans. rewrite Pa.path_path_list_rev. exists x0. apply H2. apply H6; try(assumption).
-        apply O.eq_dec.
-      * apply S.add_3 in H7. apply H6. apply H7. apply H8. auto. auto.
-      * auto. }
-  exfalso. apply (H4 x); assumption.
-Qed.
+  Module SC := SCCDef.SCCDef O S G.
+  Import SC.
 
 (** Correctness of SCC algorithm **)
 
@@ -155,11 +50,12 @@ Proof.
   apply H13. apply H5. apply H. apply A.
 Qed.
 
-
 (** Results about times of 1st DFS Pass **)
 Module D1 := (D O S G F).
 Module Der1 := (DerivedProofs.DerivedProofs O S G F D1).
 
+(*Finding the minimum element in a list based on a given function (needed to find vertex with smallest
+  discovery time in SCC*)
 Definition min_elt_list (l: list O.t) (f: O.t -> nat) : option O.t :=
   fold_right (fun x s => match s with
                      | None => Some x
@@ -251,7 +147,8 @@ Proof.
   unfold strongly_connected in H. destruct_all. rewrite H in Heqo. inversion Heqo.
 Qed.
 
-(*Definition of discovery time of SCC*)
+(*Definition of discovery time of SCC - I define it as the vertex that is discovered first (rather than the
+  time*)
 Definition d_time_scc g c (H: scc c g) :=
   min_elt_set c (D1.d_time None g).
 
@@ -524,7 +421,7 @@ Proof.
     apply A. apply B.
 Qed.
 
-End SCC.
+End SCCAlg.
 
 
 
