@@ -262,7 +262,7 @@ Proof.
 Qed.
 
 (*Thus, if we have a strongly connected set, scc-ness is decidable*)
-Lemma scc_dec: forall C g,
+Lemma scc_dec_weak: forall C g,
   strongly_connected C g ->
   {scc C g} + {~scc C g}.
 Proof.
@@ -373,6 +373,201 @@ Proof.
   apply P2.Dec.F.add_neq_iff in H0. rewrite P2.Dec.F.empty_iff in H0. destruct H0. auto. }
   apply subset_of_scc in H0. destruct H0. exists x. split. apply H0. destruct H0.
   subst. unfold S.Subset in H1. apply H1. apply S.add_1. reflexivity.
+Qed.
+
+(** More specific facts about SCCs and strong connectedness **)
+(*These are useful for proving Kosaraju's algorithm is correct specifically *)
+
+(*Decidability of [strongly_connected]*)
+
+(*Check if nonempty set is strongly connected*)
+Definition check_strong_conn (C: S.t) (g: G.graph) : bool :=
+  fold_right (fun x t => if G.contains_vertex g x && check_vertex x (S.remove x C) g then t else false)
+   true (S.elements C).
+
+Lemma check_strong_conn_spec: forall C g,
+  S.is_empty C = false ->
+  check_strong_conn C g = true <-> strongly_connected C g.
+Proof.
+  intros. unfold check_strong_conn. assert (forall l, fold_right
+  (fun (x : G.vertex) (t : bool) => if G.contains_vertex g x && check_vertex x (S.remove x C) g then t else false)
+  true l = true <-> forall x, In x l -> G.contains_vertex g x = true /\ check_vertex x (S.remove x C) g = true). {
+  intros; induction l; split; intros; simpl in *.
+  - destruct H1.
+  - reflexivity.
+  - destruct H1. subst. destruct (G.contains_vertex g x && check_vertex x (S.remove x C) g) eqn : ?.
+    + simplify.
+    + inversion H0.
+    + destruct (G.contains_vertex g a && check_vertex a (S.remove a C) g). apply IHl. apply H0. apply H1.
+      inversion H0.
+  - destruct (G.contains_vertex g a && check_vertex a (S.remove a C) g) eqn : ?.
+    + simplify.
+    + simplify. destruct (H0 a). left. reflexivity. rewrite H4 in H3. inversion H3.
+      destruct (H0 a). left. reflexivity. rewrite H5 in H3. inversion H3. }
+  rewrite H0. split; intros.
+  - unfold strongly_connected. split. apply H. split. intros. apply H1. rewrite In_InA_equiv. apply S.elements_1.
+    apply H2. intros. specialize (H1 x). destruct H1. rewrite In_InA_equiv. apply S.elements_1.
+    apply H2. rewrite check_vertex_all_paths in H5. apply H5. apply S.remove_2. apply H4. apply H3.
+  - unfold strongly_connected in H1. destruct_all.  rewrite In_InA_equiv in H2. apply S.elements_2 in H2.
+    split. apply H3. apply H2. rewrite check_vertex_all_paths. intros. rewrite P2.FM.remove_iff in H5.
+    destruct H5. split; apply H4; try(assumption). auto.
+Qed.
+
+(*Strong connectivity is decidable*)
+Lemma strongly_connected_dec: forall C g,
+  {strongly_connected C g} + {~strongly_connected C g}.
+Proof.
+  intros. destruct (S.is_empty C) eqn : ?.
+  - right. intro. unfold strongly_connected in H. destruct H. rewrite Heqb in H. inversion H.
+  - eapply (check_strong_conn_spec _ g) in Heqb. destruct (check_strong_conn C g).
+    left. apply Heqb. reflexivity. right. intro. apply Heqb in H. inversion H.
+Qed.
+
+(*Not sure if I need this, but it is interesting to know*)
+Lemma scc_dec: forall C g,
+  {scc C g} + {~scc C g}.
+Proof.
+  intros. destruct (strongly_connected_dec C g). apply scc_dec_weak. apply s. right. intro.
+  unfold scc in H. intuition.
+Qed. 
+
+(** A few more specific results **)
+
+(*If u and v are in different sccs but there is a path from u to v, then there is a point along
+  the path such that we move out of u's scc into a new one*)
+Lemma scc_path: forall u v g l c c',
+  G.contains_vertex g u = true ->
+  G.contains_vertex g v = true ->
+  scc c g ->
+  scc c' g ->
+  S.In u c ->
+  S.In v c' ->
+  S.equal c c' = false ->
+  Pa.path_list_rev g u v l = true ->
+  exists l1 l2, l = l1 ++ l2 /\ (forall x, In x l2 -> S.In x c) /\ (forall x, In x l1 -> ~S.In x c).
+Proof.
+  intros. generalize dependent v. generalize dependent c'. induction l; intros; simpl in *.
+  - exists nil. exists nil. split. reflexivity. split; intros; inversion H7.
+  - simplify. assert (G.contains_vertex g a = true). eapply G.contains_edge_1. apply H7.
+    destruct (P2.In_dec a c). exists nil. exists (a:: l).  split. simpl. reflexivity.
+    split. intros. simpl in H9. destruct H9. subst. apply i.
+    eapply scc_path_within. apply H1. apply H3. apply i. apply H8. apply H9. intros. inversion H9.
+    pose proof (vertex_in_scc g a H6). destruct H9 as [c'']. destruct H9.
+    destruct (S.equal c c'') eqn : ?. apply P2.Dec.F.equal_iff in Heqb. rewrite <- Heqb in H10.
+    contradiction.
+    specialize (IHl c''  H9 Heqb a H6 H10 H8). destruct IHl as [l1]. destruct H11 as [l2].
+    destruct_all. exists (a :: l1). exists l2. split. subst. simpl. reflexivity. split.
+    apply H12. intros. simpl in H14. destruct H14. subst. contradiction. eapply H13; eassumption.
+Qed.
+
+Definition all_paths_from (v: G.vertex) (C: S.t) (g: G.graph) :=
+  fold_right (fun x t => if O.eq_dec x v then t else if Pa.path_dec g x v then t else Some x) None (S.elements C).
+
+Lemma all_paths_from_none: forall v C g,
+  all_paths_from v C g = None <-> (forall x, S.In x C -> v <> x -> Pa.path g x v).
+Proof.
+  intros. unfold all_paths_from. assert (forall l, fold_right (fun (x : O.t) (t : option O.t) => if O.eq_dec x v then t else if Pa.path_dec g x v then t else Some x)
+  None l = None <-> (forall x, In x l -> v <> x -> Pa.path g x v)). {
+  intros. induction l; split; intros; simpl in *.
+  - destruct H0.
+  - reflexivity.
+  - destruct H0. subst. destruct (O.eq_dec x v). unfold O.eq in e. subst. contradiction.
+    destruct ( Pa.path_dec g x v). apply p. inversion H. destruct (O.eq_dec a v).
+    apply IHl. apply H. apply H0. apply H1.
+    destruct ( Pa.path_dec g a v). apply IHl. apply H. apply H0. apply H1. inversion H.
+  - destruct (O.eq_dec a v). unfold O.eq in e. subst. apply IHl. intros. apply H. right. apply H0. apply H1.
+    destruct ( Pa.path_dec g a v). apply IHl. intros. apply H. right. apply H0. apply H1.
+    specialize (H a). assert (Pa.path g a v). apply H. left. reflexivity. auto. contradiction. }
+  rewrite H. setoid_rewrite In_InA_equiv. setoid_rewrite P2.FM.elements_iff. reflexivity.
+Qed.
+
+Lemma all_paths_from_none_strong_conn: forall v C g,
+  S.In v C ->
+  (forall x, S.In x C -> Pa.path g v x) ->
+  all_paths_from v C g = None ->
+  strongly_connected C g.
+Proof.
+  intros. rewrite all_paths_from_none in H1. unfold strongly_connected. split.
+  destruct (S.is_empty C) eqn : ?. apply S.is_empty_2 in Heqb. apply P2.empty_is_empty_1 in Heqb.
+  rewrite Heqb in H. rewrite P2.Dec.F.empty_iff in H. inversion H. reflexivity. split.
+  intros. apply H0 in H2. rewrite Pa.path_path_list_rev in H2. destruct H2. apply Pa.path_implies_in_graph in H2.
+  intuition. intros. destruct (O.eq_dec v x). unfold O.eq in e. subst.
+  apply H0. apply H3. destruct (O.eq_dec v y). unfold O.eq in e. subst.
+  apply H1. apply H2. auto. eapply Pa.path_trans. apply H1. apply H2. auto. apply H0. apply H3.
+Qed.
+
+Lemma all_paths_from_some: forall C v g x,
+  all_paths_from v C g = Some x ->
+  v <> x /\ ~Pa.path g x v /\ S.In x C.
+Proof.
+  intros. unfold all_paths_from in H. assert (forall l,  fold_right
+      (fun (x : O.t) (t : option O.t) => if O.eq_dec x v then t else if Pa.path_dec g x v then t else Some x) None
+      l = Some x -> v <> x /\ ~Pa.path g x v /\ In x l). intros. induction l; simpl in *.
+    - inversion H0.
+    - destruct (O.eq_dec a v). unfold O.eq in e. subst. apply IHl in H0. simplify. 
+      destruct (Pa.path_dec g a v). simplify. inversion H0; subst. simplify.
+    - setoid_rewrite P2.FM.elements_iff.  rewrite <- In_InA_equiv. eapply H0. apply H.
+Qed.
+
+Lemma not_strongly_connected_vertex: forall u g c c1,
+  (forall x, S.In x c -> Pa.path g u x) ->
+  (forall x, S.In x c -> G.contains_vertex g x = true) ->
+  ~strongly_connected c g ->
+  scc c1 g ->
+  S.In u c1 ->
+  S.In u c ->
+  exists v c2, S.In v c /\ S.In v c2 /\ scc c2 g /\ S.equal c1 c2 = false.
+Proof.
+  intros. destruct(all_paths_from u c g) eqn : ?.
+  - exists t. apply all_paths_from_some in Heqo. destruct_all. assert (G.contains_vertex g t = true) by
+    (apply H0; assumption).  apply vertex_in_scc in H8. destruct H8. exists x. split.
+    apply H7. split. apply H8. split. apply H8. destruct (S.equal c1 x) eqn : ?.
+    rewrite <- P2.FM.equal_iff in Heqb. destruct H8. rewrite <- Heqb in H9.
+    unfold scc in H2. destruct H2. unfold strongly_connected in H2. destruct_all. 
+    assert (Pa.path g t u). apply H12. apply H9. apply H3. auto. contradiction. reflexivity.
+  - apply all_paths_from_none_strong_conn in Heqo. contradiction. apply H4. apply H.
+Qed.
+
+(*What we want to show- if u is a source vertex in a subset of the graph and has paths to all others in the set,
+  then if the set is not strongly connected, there is another vertex in the set in a different SCC such that
+  there is an edge from u's SCC to v's SCC*)
+Lemma scc_vertex: forall u C c1 g,
+  (forall x, S.In x C -> exists l, Pa.path_list_rev g u x l = true /\ forall y, In y l -> S.In y C) ->
+  (forall x, S.In x C -> G.contains_vertex g x = true) ->
+  ~strongly_connected C g ->
+  scc c1 g ->
+  S.In u c1 ->
+  S.In u C ->
+  exists v c2, S.In v C /\ S.In v c2 /\ scc c2 g /\ S.equal c1 c2 = false /\ exists x, S.In x c1 /\ G.contains_edge g x v = true.
+Proof.
+  intros. assert (A: forall x, S.In x C -> Pa.path g u x). intros. specialize (H x H5).
+  destruct H. destruct H. rewrite Pa.path_path_list_rev. exists x0. apply H.
+   pose proof (not_strongly_connected_vertex u g C c1 A H0 H1 H2 H3 H4). destruct H5 as [v].
+  destruct H5 as [c']. destruct_all. assert (exists l, Pa.path_list_rev g u v l = true /\ forall y, In y l ->
+  S.In y C). apply H. apply H5. destruct_all.
+  assert (G.contains_vertex g u = true).
+  apply H0. apply H4. assert (G.contains_vertex g v = true). apply H0. apply H5.
+  pose proof (scc_path u v g x c1 c' H11 H12 H2 H7 H3 H6 H8 H9). destruct H13 as [l1]. destruct H13 as [l2].
+  destruct_all. pose proof (nil_or_end _ l1). destruct H16.
+  - subst. simpl in H9. destruct l2.
+    + simpl in H9. exists v. exists c'. simplify. exists u. simplify.
+    + simpl in H9. simplify. exists v. exists c'. simplify. exists v0. simplify.
+  - destruct_all; subst. assert ((x1 ++ x0 :: nil) ++ l2 = x1 ++ x0 :: l2). rewrite <- app_assoc.
+    simpl. reflexivity. rewrite H13 in H9. clear H13. apply Pa.path_app in H9. simplify.
+    destruct l2. 
+    + simpl in *. exists x0. assert (G.contains_vertex g x0 = true). 
+      eapply Pa.path_implies_in_graph in H13. simplify. 
+      eapply vertex_in_scc in H9. destruct H9. exists x. simplify. apply H10. solve_in.
+      destruct (S.equal c1 x) eqn : ?.
+      * apply S.equal_2 in Heqb. rewrite <- Heqb in H18. exfalso. apply (H15 x0). solve_in. apply H18.
+      * reflexivity.
+      * exists u. simplify.
+    + simpl in *. simplify. exists x0. assert (G.contains_vertex g x0 = true). eapply G.contains_edge_2.
+      apply H9. eapply vertex_in_scc in H16. destruct H16. exists x. simplify. apply H10. solve_in.
+      destruct (S.equal c1 x) eqn : ?.
+      * apply S.equal_2 in Heqb. rewrite <- Heqb in H19. exfalso. apply (H15 x0). solve_in. apply H19.
+      * reflexivity.
+      *  exists v0. simplify.
 Qed.
 
 End SCCDef.

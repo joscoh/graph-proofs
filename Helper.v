@@ -236,6 +236,15 @@ Qed.
 
 End SetNeq.
 
+Lemma nil_or_end: forall (A: Type) (l: list A),
+  l = nil \/ exists x l', l = l' ++ x :: nil.
+Proof.
+  intros. induction l.
+  - left. reflexivity.
+  - destruct IHl. subst. right. exists a. exists nil. simpl. reflexivity. 
+    destruct_all. right. subst. exists x. exists (a :: x0). reflexivity.
+Qed.
+
 
 
 

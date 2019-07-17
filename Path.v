@@ -169,6 +169,15 @@ Qed.
       + simpl in *. simplify.
   Qed.
 
+  Lemma path_end: forall u v l x g l1,
+    l = l1 ++ x :: nil ->
+    path_list_rev g u v l = true <-> path_list_rev g x v l1 = true /\ G.contains_edge g u x = true.
+  Proof.
+    intros. subst. split; intros.
+    - apply path_app in H. simpl in H. apply H. 
+    - apply path_app. simpl. apply H.
+Qed.
+
   (*If there is a path from u to v, then there is a path from u to v that does not contain u as an intermediate
     vertex*)
   Lemma path_start_unique: forall g u v l,
