@@ -126,8 +126,13 @@ Module Type DFSBase (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)
 
   Parameter rev_f_time_def: forall o g u v,
     rev_f_time o g u v <-> f_time o g u > f_time o g v.
-  
 
+  (*The point of using an OrderedType*)
+  Parameter root_smallest: forall v g s,
+    time_of_state None g s = d_time None g v ->
+    F.is_root (dfs_forest None g) v = true ->
+    (forall u, G.contains_vertex g u = true -> white None g s u = true -> O.lt v u).
+  
 End DFSBase.
 
 Module Type DFSWithCycleDetect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G).

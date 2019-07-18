@@ -114,12 +114,16 @@ Qed.
     
 
   Parameter is_root_3: forall f r u v,
-    is_root f r = true ->
+    is_root f r = true <->
     is_root (add_child f u v) r = true.
 
   Parameter is_root_4: forall f r u,
     is_root f r = true ->
     is_root (add_root f u) r = true.
+
+  Parameter is_root_5: forall f v,
+    is_root f v = true ->
+    contains_vertex f v = true.
 
   Parameter is_child_1: forall f u v,
     is_child f u v = true -> contains_vertex f u = true /\ contains_vertex f v = true /\ is_root f v = false.

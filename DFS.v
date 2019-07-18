@@ -3447,6 +3447,75 @@ Qed.
 
 End WhitePath.
 
+(*Reasoning about the ordering of vertices*) 
+  Lemma root_discovered: forall s g v,
+    valid_dfs_state s g None ->
+    In (v, None) (get_stack s) ->
+    S.mem v (get_remain_d s) = false.
+  Proof.
+    intros. remember None as o. induction H; subst; simpl in *.
+    - destruct H0. 
+    - inversion H1; subst; simpl in *.
+      + assert (tl = nil). eapply root_nil. eapply step. apply H. apply H1. reflexivity. subst.
+        apply in_app_or in H0. destruct H0. eapply add_to_stack_adds_parent in H0. inversion H0.
+          destruct H0. inversion H0; subst. apply remove_eq_false. inversion H0.
+      + apply in_app_or in H0. destruct H0. eapply add_to_stack_adds_parent in H0. inversion H0.
+          destruct H0. inversion H0; subst. 
+        destruct (pop_stack st remain_f) eqn : ?; simpl in H3.
+        * destruct (S.min_elt remain_d); inversion H3; subst.
+        * rewrite <- H3 in Heqs. clear H3. assert (S.mem v remain_d = false). apply IHvalid_dfs_state.
+          reflexivity. eapply in_pop_rev. rewrite Heqs. right. apply H0. rewrite P2.Dec.F.remove_b.
+          simplify.
+      + destruct ((pop_stack st remain_f)) eqn : ?; simpl in H4.
+        * destruct (S.min_elt remain_d); inversion H4; subst. inversion H0.
+        * rewrite <- H4 in Heqs. clear H4. apply IHvalid_dfs_state. reflexivity. eapply in_pop_rev.
+          rewrite Heqs. right. apply H0.
+Qed.
+
+
+  Lemma root_smallest_at_d_time: forall v g s,
+    valid_dfs_state s g None ->
+    M.find v (get_d_times s) = Some (get_time s) ->
+    F.is_root (get_forest s) v = true ->
+    (forall u, white s u = true -> O.lt v u).
+  Proof.
+    intros. unfold white in H2. remember None as o. induction H; subst; simpl in *.
+    - rewrite P.F.empty_o in H0. inversion H0.
+    - inversion H3; subst; simpl in *.
+      + assert (tl = nil). eapply root_nil. eapply step. apply H. apply H3. reflexivity. subst.
+        destruct (O.eq_dec v x).
+        * unfold O.eq in e. subst. destruct (pop_stack st remain_f) eqn : ?; simpl in H5.
+          -- destruct (S.min_elt remain_d) eqn : ?.
+            ++ inversion H5; subst. destruct (O.eq_dec e u). unfold O.eq in e0. subst. simplify.
+               rewrite remove_eq_false in H6. inversion H6. rewrite P2.Dec.F.remove_neq_b in H2.
+               simplify. assert (S.In u remain_d) by (prove_in_set u remain_d).
+               pose proof (S.min_elt_2 Heqo H8). pose proof (SN.O2.IsTO.lt_total u e).
+               destruct H10; try(simplify). subst. exfalso. apply n. reflexivity. auto.
+            ++ inversion H5.
+          -- inversion H5; subst. simplify. remember (g0, f, f_times, d_times, time, remain_d, remain_f, st)
+              as s'. pose proof (root_discovered s' g x H). assert (S.mem x (get_remain_d s') = false).
+              apply H8.  eapply in_pop_rev. subst; simpl. rewrite Heqs. left.
+              reflexivity. subst; simpl in *. rewrite H9 in H4. inversion H4. 
+        * rewrite P.F.add_neq_o in H0. remember (g0, f, f_times, d_times, time, remain_d, remain_f, st)
+          as s'. replace (d_times) with (get_d_times s') in H0 by (subst; reflexivity). 
+          eapply d_times_leq_current_time in H0. subst; simpl in *; omega. apply H. auto.
+      + rewrite <- F.is_root_3 in H1. destruct (O.eq_dec v x).
+        * unfold O.eq in e. subst. apply F.is_root_5 in H1.
+          remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s'.
+          replace f with (get_forest s') in H1 by (subst; reflexivity). rewrite <- in_forest_iff_not_white in H1.
+          unfold white in H1. rewrite andb_false_iff in H1. destruct H1. subst. simpl in *.
+          rewrite H1 in H4. inversion H4. pose proof (not_f_if_not_d s' g None x H).
+          apply contrapositive in H6. subst; simpl in *. contradiction. rewrite H1. intro. inversion H7.
+          apply H. eapply remain_d_contains_valid_vertices. apply H. subst; simpl in *; assumption.
+        * rewrite P.F.add_neq_o in H0. remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s'.
+          replace (d_times) with (get_d_times s') in H0 by (subst; reflexivity). eapply d_times_leq_current_time in H0.
+          subst; simpl in *; omega. apply H. auto.
+      +  remember (g0, f, f_times, d_times, time, remain_d, remain_f, st) as s'.
+          replace (d_times) with (get_d_times s') in H0 by (subst; reflexivity). eapply d_times_leq_current_time in H0.
+          subst; simpl in *; omega. apply H. 
+Qed.
+
+ 
 (** ** Instantiating the [DFSBase] interface **)
 
 Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
@@ -3758,7 +3827,39 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
   Lemma rev_f_time_def: forall o g u v,
     rev_f_time o g u v <-> f_time o g u > f_time o g v.
   Proof. unfold rev_f_time. reflexivity. Qed.
-    
+
+  Lemma root_smallest: forall v g s,
+    time_of_state None g s = d_time None g v ->
+    F.is_root (dfs_forest None g) v = true ->
+    (forall u, G.contains_vertex g u = true ->  white None g s u = true -> O.lt v u).
+  Proof.
+    intros. destruct s. unfold dfs_forest in *. unfold d_time in *. unfold time_of_state in *.
+    destruct (end_state g None). destruct_all; simpl in *. 
+    assert (G.contains_vertex g v = true). eapply vertices_in_forest_in_graph. eapply
+    multistep_preserves_valid. apply start. apply d. apply F.is_root_5. apply H0. assert (A:= H3).
+    apply (d_time_equiv None) in H3. destruct (end_state g None). destruct_all; simpl in *.
+    assert (x1 = x0). eapply done_unique. eapply multistep_preserves_valid. apply start. apply d0.
+    eapply multistep_preserves_valid. apply start. apply d. assumption. assumption. subst.
+    rewrite H3 in H.
+    assert (valid_dfs_state x0 g None). eapply multistep_preserves_valid. apply start. assumption. 
+    pose proof (discovery_time_means_discovered x0 g None v _ H4 H3). destruct_all. 
+    assert (x1 = x). eapply times_unique. apply H7. apply v0. omega. subst.
+    rewrite H6 in H8.
+    pose proof (parent_or_root_at_discovery x g None v H7 H8). destruct H9.
+    destruct H9. assert (F.desc (get_forest x) x1 v). constructor. apply H9.
+    assert (dfs_multi x x0). assert (dfs_multi x x0 \/ dfs_multi x0 x). eapply multi_from_start.
+    apply valid_begins_with_start. apply H4. apply valid_begins_with_start. apply v0. destruct H11.
+    assumption. inversion H11. subst. pose proof (all_times_when_done x g None v H7 e0 A). destruct_all.
+    assert (x0 > get_time x). eapply discover_before_finish. apply v0. apply H8. apply H13. apply multi_refl.
+    subst. pose proof (done_cannot_step x0 g None H4 e0). exfalso. apply H14. exists y. assumption.
+    pose proof (descendant_constant _ _ _ _ _ H7 H10 _ H11). pose proof (F.is_root_2 (get_forest x0) v).
+    assert (F.contains_vertex (get_forest x0) v = true). rewrite <- DFS.same_vertices. apply A. apply H4. apply e0.
+    apply H13 in H14. clear H13. inversion H12; subst.
+    destruct H14. rewrite H15 in H0. inversion H0. exists x1. apply H13.
+    destruct H14. rewrite H16 in H0. inversion H0. exists p. apply H15.
+    eapply root_smallest_at_d_time. apply v0. apply H8. apply H9. rewrite white_equiv in H2.
+    simpl in H2. apply H2. apply H1.
+Qed. 
 
 End DFSBaseImpl. 
 

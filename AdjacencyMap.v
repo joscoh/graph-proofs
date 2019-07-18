@@ -457,7 +457,7 @@ Qed.
         rewrite list_of_graph_1. rewrite H. reflexivity.
   Qed.
 
-  Lemma tranpose_vertices: forall g v,
+  Lemma transpose_vertices: forall g v,
     contains_vertex g v = true <-> contains_vertex (get_transpose g) v = true.
   Proof.
     intros. unfold_all. unfold get_transpose. destruct g. simpl in *. apply wf_graph_vertices.

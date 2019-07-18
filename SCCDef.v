@@ -570,5 +570,30 @@ Proof.
       *  exists v0. simplify.
 Qed.
 
+(** SCCs of transpose graph **)
+Lemma scc_transpose: forall C g,
+  scc C g <-> scc C (G.get_transpose g).
+Proof.
+  intros. split; intros; unfold scc in *; destruct_all; simpl.
+  - unfold strongly_connected in H. split.
+    + unfold strongly_connected. split; try(simplify).
+      * rewrite <- G.transpose_vertices. apply H. apply H2.
+      * rewrite <- Pa.path_transpose. apply H3; simplify.
+    + intros. intro. unfold strongly_connected in H2. destruct_all. setoid_rewrite <- Pa.path_transpose in H4.
+      assert (strongly_connected (S.add x C) g). unfold strongly_connected; split. apply H2.
+      split. intros. rewrite G.transpose_vertices. apply H3. apply H7. intros.
+      apply H4; simplify. apply H0 in H1. contradiction.
+  - unfold strongly_connected in H. destruct_all. split.
+    + unfold strongly_connected; split; simplify.
+      * setoid_rewrite <- G.transpose_vertices in H1. apply H1. apply H3.
+      * setoid_rewrite <- Pa.path_transpose in H2. apply H2; simplify.
+    + intros. intro. assert (strongly_connected (S.add x C) (G.get_transpose g)). {
+      unfold strongly_connected in H4; destruct_all. unfold strongly_connected. split. apply H4.
+      split; intros. rewrite <- G.transpose_vertices. apply H5. apply H7.
+      rewrite <- Pa.path_transpose. apply H6; simplify. }
+      apply H0 in H3. contradiction.
+Qed.
+      
+
 End SCCDef.
 

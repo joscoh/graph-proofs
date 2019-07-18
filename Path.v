@@ -399,6 +399,18 @@ Proof.
   left. apply path_equiv; assumption.
   right. intro. apply path_equiv in H. rewrite H in Heqb. inversion Heqb.
 Qed.
+
+Lemma path_transpose: forall g u v,
+  path g u v <-> path (G.get_transpose g) v u.
+Proof.
+  intros. split; intros.
+  - induction H.
+    + constructor. rewrite <- G.transpose_edges. apply H.
+    + eapply path_trans. apply p_start. rewrite <- G.transpose_edges. apply H0. apply IHpath.
+  - remember (get_transpose g) as gt. induction H; subst.
+    + apply G.transpose_edges in H. constructor. apply H.
+    + eapply path_trans. apply p_start. apply G.transpose_edges. apply H0. apply IHpath. reflexivity.
+Qed.
   
 
 

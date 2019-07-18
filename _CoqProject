@@ -1,7 +1,7 @@
 -Q . ""
 Helper.v
+Ordering.v
 Graph.v
-AdjacencyMap.v
 Path.v
 SCCDef.v
 Forest.v

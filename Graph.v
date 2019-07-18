@@ -28,6 +28,10 @@ Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
 
   Parameter get_transpose: graph -> graph.
 
+  Parameter Equal: graph -> graph -> Prop.
+
+  Parameter lt: graph -> graph -> Prop.
+  
   Parameter empty_1: forall v,
     contains_vertex empty v = false.
 
@@ -85,11 +89,29 @@ Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
   Parameter set_of_graph_1: forall g v,
     contains_vertex g v = true <-> S.In v (set_of_graph g).
 
-  Parameter tranpose_vertices: forall g v,
+  Parameter transpose_vertices: forall g v,
     contains_vertex g v = true <-> contains_vertex (get_transpose g) v = true.
 
   Parameter transpose_edges: forall g u v,
     contains_edge g u v = true <-> contains_edge (get_transpose g) v u = true.
+
+  Parameter Equal_equiv: Equivalence Equal.
+
+  Parameter Equal_lt_l: forall g1 g2 g3,
+    Equal g1 g2 ->
+    lt g1 g3 <-> lt g2 g3.
+
+  Parameter Equal_lt_r: forall g1 g2 g3,
+    Equal g1 g2 ->
+    lt g3 g1 <-> lt g3 g2.
+
+  Parameter Equal_dec: forall x y, {Equal x y} + {~Equal x y}.
+
+  Parameter lt_trans : forall x y z : graph, lt x y -> lt y z -> lt x z.
+
+  Parameter lt_not_eq : forall x y : graph, lt x y -> ~ Equal x y.
+
+  Parameter compare : forall x y : graph, Compare lt Equal x y.
 
   (*TODO: see if better way to define in interface*)
   (*A topological ordering is one where there are no edges going backward in the list and every vertex in the 
