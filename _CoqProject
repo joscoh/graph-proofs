@@ -1,6 +1,7 @@
 -Q . ""
 Helper.v
-Ordering.v
+Order.v
+SetType.v
 Graph.v
 Path.v
 SCCDef.v
