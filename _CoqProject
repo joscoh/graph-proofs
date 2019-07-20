@@ -1,7 +1,5 @@
 -Q . ""
 Helper.v
-Order.v
-SetType.v
 Graph.v
 Path.v
 SCCDef.v
@@ -12,3 +10,4 @@ SCCAlg.v
 DFS.v
 DFSCycle.v
 DFSTopoSort.v
+DFSOrder.v

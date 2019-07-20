@@ -13,6 +13,22 @@ Require Import DerivedProofs.
 Require Import SCCDef.
 Require Import Coq.Classes.RelationClasses.
 
+(*We can create  UsualOrdered instance of the finish times. This is a really annoying function of the
+  fact that Coq's modules do not support values as parameters, so we use a separate typeclass to define
+  an ordering, along with a set. (We need the set fo efficiency reasons: if we just pass in an ordering
+  function, it would take O(n) time to find the min each time we start a new tree. With a set, we can
+  do this in O(log n). But it makes everything more complicated*)
+(*
+Module ReverseFTime (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)
+  (D: DFSBase O S G F) .
+
+  Module GO := (Graph.GraphOrder O S G).
+  Import GO.
+
+
+End ReverseFTime.*)
+    
+(*
 (*In reality, our graoh is fixed, but Coq's modules do not seem to support a value parameter*)
 Module ReverseFTime (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)
   (D: DFSBase O S G F) <: OrderedType.
@@ -119,7 +135,8 @@ End ReverseFTime.
  Parameter eq_dec : forall x y : t, { eq x y } + { ~ eq x y }.
 
 *)
-Module SCCAlg(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase).
+Module SCCAlg(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase)
+  (D' : DFSCustomOrder).
 
   Module Pa := (Path.PathTheories O S G).
   Module P2 := FSetProperties.WProperties_fun O S.
@@ -127,8 +144,8 @@ Module SCCAlg(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: For
   Module SN := Helper.SetNeq O S.
   Module SC := SCCDef.SCCDef O S G.
   Import SC.
+  
 
-Search S.Equal.
 
 (** Correctness of SCC algorithm **)
 
@@ -549,8 +566,47 @@ Proof.
 Qed.
 
 (** Defining the second DFS pass **)
+Module D2 := (D' O S G F).
 
+Program Instance reverseF (g: G.graph) : D2.G'.GraphOrdering g 
+  (fun v1 v2 => (D1.f_time None g v2) <? (D1.f_time None g v1)) := {
+  }.
+Next Obligation.
+rewrite Nat.ltb_lt in *. omega.
+Defined.
+Next Obligation.
+intro. subst. rewrite Nat.ltb_lt in *. omega.
+Defined.
+Next Obligation.
+repeat(rewrite Nat.ltb_lt). assert ((D1.f_time None g y < D1.f_time None g x) \/ (D1.f_time None g y > D1.f_time None g x)
+\/ (D1.f_time None g y = D1.f_time None g x)) by omega. destruct H1; try(simplify). right. right.
+eapply D1.f_times_unique. apply H. apply H0. symmetry. apply H2.
+Defined. 
+(*
+Next Obligation.
+case_eq (Nat.compare (D1.f_time None g x) (D1.f_time None g y)); intro; simpl in *.
+- apply EQ. unfold O.eq. eapply D1.f_times_unique. apply H. apply H0. apply Nat.compare_eq in H1. apply H1.
+- apply GT. simpl. apply nat_compare_Lt_lt in H1. omega.
+- apply LT. simpl. apply nat_compare_Gt_gt in H1. omega.
+Defined.*)
 
+Section SecondPass.
+  Variable g : G.graph.
+  Definition lt := (fun v1 v2 => D1.f_time None g v2 <? D1.f_time None g v1).
+(*Just a test - ok figure this out tomorrow - can either do backtracking with nats (or more likely for now -
+  just pass a function*)
+Lemma root_largest_finish_time: forall v (s: D2.state g lt (reverseF g) None),
+  D2.time_of_state g lt (reverseF g) None s = D2.d_time g lt (reverseF g) None v ->
+  F.is_root (D2.dfs_forest g lt (reverseF g) None) v = true ->
+  (forall (u : G.vertex), G.contains_vertex g u = true -> D2.white g lt (reverseF g) None s u = true -> 
+  D1.f_time None g v > D1.f_time None g u).
+Proof.
+  intros. pose proof  (D2.root_smallest g ((fun v1 v2 : O.t =>
+       D1.f_time None g v2 <? D1.f_time None g v1)) (reverseF g) v s H H0 u H1 H2). simpl in H3.
+  rewrite Nat.ltb_lt in H3. apply H3.
+Qed. 
+
+End SecondPass.
 
 
 End SCCAlg.

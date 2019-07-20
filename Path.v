@@ -7,7 +7,6 @@ Require Import Omega.
 
 Module PathTheories  (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
 
-  Module G := Graph.
 
   Import G.
 

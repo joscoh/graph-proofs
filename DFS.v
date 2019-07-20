@@ -3531,6 +3531,7 @@ Module DFSBaseImpl <: (DFSSpec.DFSBase O S G F).
 
   Definition state o (g: graph) := {s : DFS.state | valid_dfs_state s g o} .
 
+
   Definition f_time o (g: graph) (v: vertex) : nat :=
     match M.find v (get_f_times (proj1_sig (end_state g o))) with
     | Some n => n

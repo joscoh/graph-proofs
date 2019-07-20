@@ -125,3 +125,27 @@ Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
 
 
 End Graph.
+
+Module GraphOrder (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
+
+Class GraphOrdering g (lt' : O.t -> O.t -> bool) := {
+ lt_trans' : forall (x y z : O.t), 
+    G.contains_vertex g x = true ->
+    G.contains_vertex g y = true ->
+    G.contains_vertex g z = true ->
+    lt' x y = true -> lt' y z = true -> lt' x z = true;
+ lt_not_eq' : forall (x y : O.t),
+    G.contains_vertex g x = true ->
+    G.contains_vertex g y = true ->
+    lt' x y = true -> x <> y;
+  lt_total: forall (x y : O.t),
+    G.contains_vertex g x = true ->
+    G.contains_vertex g y = true ->
+    lt' x y = true \/ lt' y x = true \/ x = y
+ (*Gcompare : forall (x y : O.t),
+     G.contains_vertex g x = true ->
+      G.contains_vertex g y = true ->
+     Compare lt O.eq x y;*)
+}.
+
+End GraphOrder.
