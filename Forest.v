@@ -5,9 +5,9 @@ Require Export Path.
 Require Import Coq.Lists.List.
 (*TODO: maybe extend graph instead of providing function*)
 
-Module Type Forest(O: UsualOrderedType)(Sg: FSetInterface.Sfun O)(G: Graph O Sg).
+Module Type Forest(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
 
-  Module P := (Path.PathTheories O Sg G).
+  Module P := (Path.PathTheories O S G).
 
   Parameter forest : Type.
 
@@ -34,6 +34,8 @@ Module Type Forest(O: UsualOrderedType)(Sg: FSetInterface.Sfun O)(G: Graph O Sg)
  (* Parameter is_descendant: forest -> vertex -> vertex -> bool.*)
 
   Definition is_parent f u v := is_child f v u.
+
+  Parameter get_trees: forest -> list (S.t).
 
  (* Definition is_ancestor f u v := is_descendant f v u.*)
 
@@ -189,13 +191,19 @@ Qed.
 *)
   (*Parameter is_descendant_iff: forall t u v,
     is_descendant t u v = true <-> is_child t u v = true \/ exists p, is_descendant t u p = true /\ is_child t p v = true.*)
-
   Inductive desc: forest -> vertex -> vertex -> Prop :=
   | parent: forall f u v, is_child f u v = true -> desc f u v
   | d_step: forall f u v p,
     desc f u p ->
     is_child f p v = true ->
     desc f u v.
+
+Parameter get_trees_partition: forall f,
+    P.partition contains_vertex f (get_trees f).
+
+  Parameter get_trees_root: forall f t,
+    InA S.Equal t (get_trees f) ->
+    exists x, is_root f x = true /\ S.In x t /\ forall v, v <> x -> S.In v t <-> desc f x v.
 
   Lemma is_descendant_edge: forall t u v,
     is_child t u v = true ->
@@ -412,6 +420,46 @@ Parameter desc_neq: forall f u v,
       + simpl in *. simplify.
       + simpl in *. simplify.
   Qed.
+
+Lemma root_no_parent: forall f r,
+  contains_vertex f r = true ->
+  is_root f r = true <-> (forall u, is_child f u r = false).
+Proof.
+  intros. eapply is_root_2 in H. destruct H. split; intros.
+  - apply contrapositive in H0. destruct (is_child f u r) eqn : ?. 
+    exfalso. apply H0. exists u. apply Heqb. reflexivity. rewrite H1. intro. inversion H2.
+  - apply contrapositive in H. destruct (is_root f r ) eqn : ?. reflexivity. contradiction.
+    intro. destruct H2. rewrite H1 in H2. inversion H2.
+Qed.
+
+Lemma root_no_desc: forall f r,
+  contains_vertex f r = true ->
+  is_root f r = true <-> (forall u, ~desc f u r).
+Proof.
+  intros. split; intros.
+  - intro. rewrite root_no_parent in H0. inversion H1; subst.
+    rewrite H0 in H2. inversion H2. rewrite H0 in H3. inversion H3. apply is_root_5. apply H0.
+  - rewrite root_no_parent. intros. destruct (is_child f u r ) eqn : ?. 
+    exfalso. apply (H0 u). constructor. apply Heqb. reflexivity. apply H.
+Qed.
+
+Lemma tree_root_unique: forall f t r1 r2,
+  InA S.Equal t (get_trees f) ->
+  is_root f r1 = true ->
+  is_root f r2 = true ->
+  S.In r1 t ->
+  S.In r2 t ->
+  r1 = r2.
+Proof.
+  intros. apply get_trees_root in H. destruct_all.
+  assert (x = r1).  destruct (O.eq_dec x r1). apply e.
+  assert (desc f x r1). apply H5. auto. apply H2.
+  rewrite root_no_desc in H0. specialize (H0 x). contradiction. apply is_root_5. apply H0.
+  subst. destruct (O.eq_dec r1 r2). apply e. 
+  assert (desc f r1 r2). apply H5. auto. apply H3.
+  rewrite root_no_desc in H1. specialize (H1 r1). contradiction. apply is_root_5. apply H1.
+Qed.
+  
 
     
 (*might need equal lemma to ensure it is acyclic but we 

@@ -4,8 +4,6 @@ Require Import Graph.
 Require Import Forest.
 Require Import Path.
 Require Import Coq.Init.Nat.
-Require Import Order.
-Require Import SetType.
 
 Module Type DFSBase (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G).
 

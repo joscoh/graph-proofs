@@ -138,11 +138,12 @@ End ReverseFTime.
 Module SCCAlg(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase)
   (D' : DFSCustomOrder).
 
-  Module Pa := (Path.PathTheories O S G).
+  
   Module P2 := FSetProperties.WProperties_fun O S.
   Module O2 := OrderedTypeFacts O.
   Module SN := Helper.SetNeq O S.
   Module SC := SCCDef.SCCDef O S G.
+  Module Pa := SC.Pa.
   Import SC.
   
 
@@ -568,7 +569,7 @@ Qed.
 (** Defining the second DFS pass **)
 Module D2 := (D' O S G F).
 
-Program Instance reverseF (g: G.graph) : D2.G'.GraphOrdering g 
+Program Instance reverseF (g: G.graph) : D2.G'.GraphOrdering (G.get_transpose g) 
   (fun v1 v2 => (D1.f_time None g v2) <? (D1.f_time None g v1)) := {
   }.
 Next Obligation.
@@ -580,7 +581,8 @@ Defined.
 Next Obligation.
 repeat(rewrite Nat.ltb_lt). assert ((D1.f_time None g y < D1.f_time None g x) \/ (D1.f_time None g y > D1.f_time None g x)
 \/ (D1.f_time None g y = D1.f_time None g x)) by omega. destruct H1; try(simplify). right. right.
-eapply D1.f_times_unique. apply H. apply H0. symmetry. apply H2.
+eapply D1.f_times_unique. apply G.transpose_vertices. apply H.
+apply G.transpose_vertices. apply H0. symmetry.  apply H2.
 Defined. 
 (*
 Next Obligation.
@@ -591,20 +593,189 @@ case_eq (Nat.compare (D1.f_time None g x) (D1.f_time None g y)); intro; simpl in
 Defined.*)
 
 Section SecondPass.
-  Variable g : G.graph.
-  Definition lt := (fun v1 v2 => D1.f_time None g v2 <? D1.f_time None g v1).
+  Variable g' : G.graph.
+  Definition gt := G.get_transpose g'.
+  Definition lt := (fun v1 v2 => D1.f_time None g' v2 <? D1.f_time None g' v1).
 (*Just a test - ok figure this out tomorrow - can either do backtracking with nats (or more likely for now -
   just pass a function*)
-Lemma root_largest_finish_time: forall v (s: D2.state g lt (reverseF g) None),
-  D2.time_of_state g lt (reverseF g) None s = D2.d_time g lt (reverseF g) None v ->
-  F.is_root (D2.dfs_forest g lt (reverseF g) None) v = true ->
-  (forall (u : G.vertex), G.contains_vertex g u = true -> D2.white g lt (reverseF g) None s u = true -> 
-  D1.f_time None g v > D1.f_time None g u).
+Lemma root_largest_finish_time: forall v (s: D2.state gt lt (reverseF g') None),
+  D2.time_of_state gt lt (reverseF g') None s = D2.d_time gt lt (reverseF g') None v ->
+  F.is_root (D2.dfs_forest gt lt (reverseF g') None) v = true ->
+  (forall (u : G.vertex), G.contains_vertex g' u = true -> D2.white gt lt (reverseF g') None s u = true -> 
+  D1.f_time None g' v > D1.f_time None g' u).
 Proof.
-  intros. pose proof  (D2.root_smallest g ((fun v1 v2 : O.t =>
-       D1.f_time None g v2 <? D1.f_time None g v1)) (reverseF g) v s H H0 u H1 H2). simpl in H3.
-  rewrite Nat.ltb_lt in H3. apply H3.
+  intros. apply G.transpose_vertices in H1. replace (G.get_transpose g') with gt in H1. 
+     pose proof  (D2.root_smallest gt ((fun v1 v2 : O.t =>
+       D1.f_time None g' v2 <? D1.f_time None g' v1)) (reverseF g') v s H H0 u H1 H2). simpl in H3.
+  rewrite Nat.ltb_lt in H3. apply H3. reflexivity. 
 Qed. 
+
+
+(*For any two trees in the DFS forest, if the root of t1 finishes before the root of t2, then there
+  is no edge rom t1 to t2*)
+
+Lemma get_tree_in_graph: forall g lt H o v t,
+  InA S.Equal t (F.get_trees (D2.dfs_forest g lt H o)) ->
+  S.In v t ->
+  G.contains_vertex g v = true.
+Proof.
+  intros. eapply F.get_trees_root in H0. destruct H0. destruct_all. destruct (O.eq_dec v x).
+  unfold O.eq in e. subst. eapply D2.same_vertices. apply F.is_root_5. apply H0.
+  rewrite H3 in H1. apply F.desc_in_forest in H1. eapply D2.same_vertices. apply H1. auto.
+Qed.
+
+Lemma no_edge_to_later_tree: forall g lt H o v1 v2 r1 r2 t1 t2 (E: S.equal t1 t2 = false),
+  InA S.Equal t1 (F.get_trees (D2.dfs_forest g lt H o)) ->
+  InA S.Equal t2 (F.get_trees (D2.dfs_forest g lt H o)) ->
+  S.In r1 t1 ->
+  S.In v1 t1 ->
+  S.In r2 t2 ->
+  S.In v2 t2 ->
+  F.is_root (D2.dfs_forest g lt H o) r1 = true ->
+  F.is_root (D2.dfs_forest g lt H o) r2 = true ->
+  D2.f_time g lt H o r1 < D2.f_time g lt H o r2 ->
+  G.contains_edge g v1 v2 = false.
+Proof.
+  intros. destruct (G.contains_edge g v1 v2) eqn : ?.
+  - assert (G.contains_vertex g r1 = true). { eapply D2.same_vertices. 
+    apply F.is_root_5. apply H6. } 
+    assert (Hr: G.contains_vertex g r2 = true). { eapply D2.same_vertices. 
+    apply F.is_root_5. apply H7. } pose proof (D2.discovery_exists g lt0 H o r1 H9).
+    destruct H10 as [sr1]. assert (forall v, S.In v t1 -> v <> r1 -> D2.white g lt0 H o sr1 v = true). { intros.
+    assert (A:= H0).
+    apply F.get_trees_root in H0. destruct H0. assert (x = r1). { eapply F.tree_root_unique.
+    apply A. apply H0. apply H6. destruct_all. apply H13. apply H2. } subst.
+    destruct_all. clear H0. clear H13. rewrite D2.white_def. rewrite Nat.ltb_lt. rewrite H10.
+    eapply D2.descendant_iff_interval. apply H9. eapply get_tree_in_graph. apply A. apply H11.
+    apply H14. auto. apply H11. }
+    assert (forall v, S.In v t2 -> D2.white g lt0 H o sr1 v = true). { intros.
+    assert (r1 <> r2). intro. subst. omega.
+    assert (D2.d_time g lt0 H o r1 < D2.d_time g lt0 H o r2). { 
+    assert ((D2.d_time g lt0 H o r1 < D2.d_time g lt0 H o r2) \/ (D2.d_time g lt0 H o r1 = D2.d_time g lt0 H o r2)
+    \/ (D2.d_time g lt0 H o r1 > D2.d_time g lt0 H o r2)) by omega. destruct H14. apply H14. destruct H14.
+    assert (r1 = r2). eapply D2.d_times_unique. apply H9. apply Hr. apply H14. contradiction. 
+    pose proof (D2.parentheses_theorem g lt0 H o r1 r2 H9 Hr H13). destruct H15. omega. destruct H15.
+    destruct_all. assert (F.desc (D2.dfs_forest g lt0 H o) r2 r1). { eapply D2.descendant_iff_interval; try(assumption);
+    try(omega). } rewrite F.root_no_desc in H6. specialize (H6 r2). contradiction. apply F.is_root_5. apply H6.
+    omega. } destruct (O.eq_dec v r2). unfold O.eq in e. subst. rewrite D2.white_def. rewrite Nat.ltb_lt. rewrite H10.
+    apply H14. assert (F.desc (D2.dfs_forest g lt0 H o) r2 v). assert (A:= H1). apply F.get_trees_root in H1. destruct_all.
+    assert (x = r2). eapply F.tree_root_unique. apply A. all: try(eassumption). subst.
+    apply H16. auto. apply H12. rewrite D2.descendant_iff_interval in H15. rewrite D2.white_def.
+    rewrite Nat.ltb_lt. omega. apply Hr. eapply get_tree_in_graph. apply H1. apply H12. }
+    assert (F.desc (D2.dfs_forest g lt0 H o) r1 v2). { eapply D2.white_path_theorem. apply H9.
+    intros. assert (s = sr1). eapply D2.state_time_unique. omega. subst. assert (A:= H0).
+    apply F.get_trees_root in H0. destruct_all. assert ( x = r1). eapply F.tree_root_unique. apply A.
+    all: try(assumption). subst. destruct (O.eq_dec r1 v1). unfold O.eq in e. subst.
+    exists nil. rewrite D2.P.path_list_ind_rev. simplify.
+    assert (F.desc (D2.dfs_forest g lt0 H o) r1 v1). {
+    apply H15. intro. subst. apply n. reflexivity. assumption. }
+    rewrite D2.white_path_theorem in H16. specialize (H16 sr1 H13). destruct H16.
+    exists (v1 :: x). rewrite D2.P.path_list_ind_rev. rewrite D2.P.path_list_ind_rev in H16.
+    destruct_all.  simpl. simplify. subst. apply H18. apply H9. } 
+    assert (v2 <> r1). { intro. subst. rewrite F.root_no_desc in H6. specialize (H6 r1). contradiction.
+    apply F.is_root_5; assumption. } assert (S.In v2 t1). assert (A:= H0). apply F.get_trees_root in H0.
+    destruct_all. assert (x = r1). eapply F.tree_root_unique; try(apply A); try(assumption). subst.
+    apply H16. auto. apply H13. pose proof (F.get_trees_partition ((D2.dfs_forest g lt0 H o))).
+    unfold F.P.partition in H16. destruct_all.  unfold F.P.disjoint in H17. specialize (H17 
+    t1 t2 E H0 H1 v2). exfalso. apply H17; split; assumption.
+  - reflexivity.
+Qed. 
+
+(*One final lemma before the algorithm: get_trees is a partition according to G.contains_vertex*)
+Lemma get_trees_partition_graph : forall g lt H o,
+  Pa.partition G.contains_vertex g (F.get_trees (D2.dfs_forest g lt H o)). 
+Proof.
+  intros. unfold Pa.partition. pose proof (F.get_trees_partition (D2.dfs_forest g lt0 H o)).
+  unfold F.P.partition in H0. destruct_all. split. intros. apply H0.
+  apply D2.same_vertices. apply H2. apply H1.
+Qed.
+
+(** Kosaraju's Strongly Connected Components Algorithm **)
+Search F.desc.
+
+(*TODO; maybe move this, maybe dont be so lazy also with assumptions*)
+
+Lemma desc_path: forall u v l,
+  u <> v ->
+  F.desc_list (D2.dfs_forest gt lt (reverseF g') None) u v l = true ->
+  Pa.path_list_rev gt u v l = true.
+Proof.
+  intros. generalize dependent v. induction l; intros; simpl in *.
+  - eapply D2.same_edges. apply H0.
+  - simplify. eapply D2.same_edges. apply H1. apply IHl. intros. eapply F.desc_neq.
+    rewrite <- F.desc_list_iff_desc. exists l. apply H2. auto. apply H2.
+Qed. 
+Require Import Wellfounded.
+
+(*Let's try with induction*)
+
+
+Lemma strong_ind_trees: forall (P: S.t -> Prop)
+
+Lemma all_trees_strongly_connected: forall t1,
+  InA S.Equal t1 (F.get_trees (D2.dfs_forest gt lt (reverseF g') None)) ->
+  scc t1 gt.
+Proof.
+  intros. assert (A:= H). apply F.get_trees_root in H. destruct_all.
+  clear H1. clear H0. remember (D1.f_time None g' x) as n. induction x using (@well_founded_induction G.vertex 
+                        (fun x y : G.vertex => D1.f_time None g' x < D1.f_time None g' y)
+                       (wf_inverse_image _ nat _ (@D1.f_time None g' )
+                          PeanoNat.Nat.lt_wf_0)).
+
+
+
+Lemma all_trees_strongly_connected: forall t1,
+  InA S.Equal t1 (F.get_trees (D2.dfs_forest gt lt (reverseF g') None)) ->
+  strongly_connected t1 gt.
+Proof.
+  intros. destruct (strongly_connected_dec t1 gt). apply s.
+  assert (A:= H). apply F.get_trees_root in H. destruct_all.
+  pose proof (vertex_in_scc gt x). assert (G.contains_vertex gt x = true).
+   unfold gt in A. unfold lt in A. eapply get_tree_in_graph in A. apply A.
+  apply H0. specialize (H2 H3). destruct H2 as [C]. destruct_all.
+  
+  assert (forall x0 : S.elt,
+      S.In x0 t1 ->
+      x0 <> x ->
+      exists l : list G.vertex, Pa.path_list_rev gt x x0 l = true /\ (forall y : G.vertex, In y l -> S.In y t1)). {
+  intros. apply H1 in H5. assert (x <> x0) by auto. rewrite <- F.desc_list_iff_desc in H5.
+  destruct H5 as [l']. assert (B:= H5). eapply (desc_path _ _ _  H7) in H5. exists l'. simplify.
+  destruct (O.eq_dec y x). unfold O.eq in e. subst. assumption. apply H1. auto.
+  eapply F.desc_list_all_desc. apply B. apply H8. auto. }
+  assert ((forall x : S.elt, S.In x t1 -> G.contains_vertex gt x = true)). { intros.
+  eapply get_tree_in_graph. apply A. apply H6. } 
+     pose proof (scc_vertex x t1 C gt H5 H6 n H2 H4 H0). clear H5.
+  destruct H7 as [v]. destruct H5 as [C']. destruct_all. 
+  (*Now we have another SCC, either every vertex in t1 or in a different one - if in a tree before, then v is
+    descendant so in wrong tree. If it comes after, then that vertex should be in this tree. So it is entirely
+    within t1, but it has a later finish time, which contradicts transpose corollary and root largest finish time
+    so it must actually be strongly connected.
+  *)
+   pose proof (find_max_scc_exists (D1.f_time None g') gt C H2).
+   pose proof (find_max_scc_exists (D1.f_time None g') gt C' H8).
+   destruct H12 as [fC]. destruct H13 as [fC'].
+   assert (forall y, S.In y C -> S.In y t1). {
+   pose proof (get_trees_partition_graph gt lt (reverseF g') None).
+   pose proof (scc_partition_1 _ _ _ _ _ H2 H14 A H4 H0). destruct H15. apply H15.
+   pose proof (scc_partition_2 _ _ _ _ _ H2 H14 A H4 H0). destruct H16. apply H16.
+   destruct_all. 
+     
+
+   assert (G.contains_vertex gt fC = true). unfold scc in H2. destruct H2. unfold strongly_connected in H2.
+    apply H2. eapply max_elt_set_in_set. apply H12. pose proof (get_trees_partition_graph gt lt (reverseF g') None).
+    unfold Pa.partition in H15. destruct_all. assert (FC:=H15). specialize (FC _ H14). destruct FC as [fCt FC].
+    destruct FC. assert (S.equal t1 fCt = true). { destruct (S.equal t1 fCt) eqn : ?. reflexivity.
+    
+    
+   assert (fC = x). destruct (O.eq_dec fC x). apply e. assert (B:= H12). apply max_elt_set_finds_max with (y:= x) in H12.
+   assert (F.desc (D2.dfs_forest gt lt (reverseF g') None) x fC). { apply H1. auto. eapply max_elt_set_in_set.
+   apply B.
+  
+  
+  apply not_strongly_connected_vertex in n. 
+  
+
+
 
 End SecondPass.
 
