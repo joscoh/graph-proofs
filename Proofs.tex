@@ -487,4 +487,76 @@ If $g$ is acyclic and $l$ is a list containing all the vertices of $g$ that is s
 \begin{proof}
 Clearly the first two conditions are met by assumption. We must show that if $l = l1 ++ u :: l2 ++ v :: l3$, then $(v,u)$ does not exist. Suppose it does exist. Then, by lemma 6.9, $fu < fv$. But then $v$ should appear later in $l$, since it is sorted. This is a contradiction. Thus, we have a topological sorting.
 \end{proof}
+\section{Strongly Connected Components}
+This proof of correctness of Kosaraju's algorithm for computing strongly connected components is based on the CLRS proof, but it proceeds differently towards the end. In particular, this proof does not use induction.
+\\We assume the following facts about SCCs and strong connectivity, which are unsurprising but are nontrivial to prove in Coq:
+\begin{lemma}
+Every vertex is a member of some SCC.
+\end{lemma}
+\begin{lemma}
+If a set $C$ is strongly connected but is not an SCC, then there is a vertex $v$ that is not in $C$ but, when $v$ is added to $C$, the resulting set is still strongly connected.
+\end{lemma}
+\begin{lemma}
+Let $s$ and $C$ be two sets of vertices, and let $u$ be in both sets. Furthermore, suppose there is a path from $u$ to every vertex in $s$. Suppose $C$ is an SCC but $s$ is not strongly connected. Then, there is a vertex $v$ in $s$ such that $v$ is in SCC $C'\neq C$ and there is an edge from a vertex in $C$ to $v$. 
+\end{lemma}
+\begin{lemma}
+Suppose we have a partition $P$ of a graph. Let $S$ be a set in this partition and $u$ a vertex in $S$. Let $C$ be the SCC that $u$ belongs to (exists by Lemma 7.1). Then, either every vertex in $C$ is in $S$, or there is a set $S' \in P$ such that $S\neq S$ and there is an edge $(x,y)$ from $S$ to $S'$ such that both $x$ and $y$ are in $C$.
+\end{lemma}
+\begin{lemma}
+Let $t_1$ and $t_2$ be two trees in the DFS forest and $r_1$ and $r_2$ be their respective roots. Then if $f(r_1) < f(r_2)$, then $f(r_1) < d(r_1)$.
+\end{lemma}
+Lemmas from CLRS:
+\\My proofs of these lemmas in Coq are essentially identical to the proofs in the book.
+\begin{lemma}[Lemma 22.13]
+Let $C$ and $C'$ be distinct SCCs in a graph $g$. Then, if there is a path from $u$ to $v$ such that $u\in C$ and $v\in C'$, there is no path from a vertex in $C'$ to a vertex in $C$.
+\end{lemma}
+Define the finish time of an SCC to be the finish time of the last vertex to finish in the first pass of DFS. Then, we have the following results:
+\begin{lemma}[Lemma 22.14]
+Let $C$ and $C'$ be distinct SCCs in $G$. Then if there is an edge $(u,v)$ such that $u\in C$ and $v\in C'$, then $f(C) > f(C')$
+\end{lemma}
+\begin{lemma}[Corollary 22.15]
+Let $C$ and $C'$ be distinct SCCs in $G$. Then if there is an edge $(u,v)\in G^T$ such that $u\in C$ and $v\in C'$, then $f(C) < f(C')$
+\end{lemma}
+Proving the correctness of the algorithm:
+\\The following key lemma expresses a general fact about the properties of the DFS forest and allow us to prove the correctness of the SCC algorithm.
+\begin{lemma}
+Let $t_1$ and $t_2$ be two trees in the DFS forest, and let $r_1$ and $r_2$ be their roots, respectively. Suppose that $f(r_1) < f(r_2)$. Then, for any $u\in t_1$ and $v\in t_2$, there is no path from $u$ to $v$.
+\end{lemma}
+\begin{proof}
+Let $u$ and $v$ be arbitrary vertices such that $u\in t_1$ and $v\in t_2$. Assume there is a path from $u$ to $v$. Then let $x$ be first vertex that is discovered along this path. We have 3 cases:
+\begin{enumerate}
+\item
+$x = u$. Then, at time $d(u)$, every vertex along this path is white, so by the white path theorem, $v$ is a descendant of $u$ in the DFS forest. Therefore, $v$ is a descendant of $r_1$ and of $r_2$. This implies that $r_1=r_2$, since a vertex can only be the descendant of 1 root. But $f(r_1) \neq f(r_2)$, so $r_1\neq r_2$, a contradiction.
+\item
+$x=v$. Then we have that $d(x) < d(u)$. But by Corollary 22.8, $d(r_2) < d(x) < f(x) < f(r_2)$ and $d(r_1) < d(u) < f(x) < f(r_1)$. But by lemma 7.5 and by assumption $f(r_1) < d(r_2)$, which implies that $d(u) < d(x)$, a contradiction.
+\item
+$x$ is an intermediate vertex. In this case, we have two further cases, both similar to those above:
+\begin{enumerate}
+\item
+$x$ is in $t_2$. Then, similar to case 2, we have that $d(x) < d(u)$. But since $x$ is in $t_2$, $d(r_2) < d(x) < f(x) < f(r_2)$ and $d(r_1) < d(u) < f(u) < f(r_1)$ by Corollary 22.8. By Lemma 7.5, $f(r_1) < d(r_2)$, so $d(u) < d(x)$, a contradiction.
+\item
+$x$ is in $t_3$ and $t_3\neq t_2$. Then let $r_3$ be the root of this tree. Since $x$ is on the path, we can split the path into $p = u, v_1, v_2, ..., v_k, x, v_{k+1}, ... ,v_n, v$. Then, since $x$ was the first vertex seen, all of $v_{k+1},..,v_n, v$ are white a time $d(x)$. Thus, by the white path theorem, $v$ is a descendant of $x$. Therefore, $v$ is a descendant of $r_3$. Since a vertex can only descend from 1 root, $r_2 = r_3$, which means that this vertex is in both $t_2$ and $t_3$, which contradicts the fact that the trees in the DFS forest are disjoint. 
+\end{enumerate}
+\end{enumerate}
+Thus, in all cases, we get a contradiction, so there cannot be a path.
+\end{proof}
+\begin{lemma}
+If a vertex $x$ is in DFS tree $t$ and scc $C$, then $C\subseteq t$.
+\end{lemma}
+\begin{proof}
+Assume not. Then by Lemma 7.4, we can find another tree $t'$ such that there is an edge from $x$ in $t$ to $y$ in $t'$ and $x$ and $y$ are both in $C$. Since $C$ is an scc, there is a path from $y$ to $x$. Then, if $t$ is an earlier tree (its root finishes earlier), this path contradicts Lemma 7.9. If $t'$ is the earlier tree, the edge contradicts Lemma 7.9. 
+\end{proof}
+\begin{lemma}
+Every tree $t$ in the DFS forest of the second pass is strongly connected.
+\end{lemma}
+\begin{proof}
+Assume $t$ is not strongly connected. Let $r_1$ be the root of this tree. By Lemma 7.1, there is an scc $C$ such that $r_1\in C$. By Lemma 7.3, since $t$ is not strongly connected, there is a vertex $v$ in $t$ in a different SCC $C'$ and an edge from $C$ to $C'$. By Lemma 7.10, both $C$ and $C'$ are contained within $t$. We know that $r_1$ is the vertex in $C$ that finishes last (since it is the vertex in $t$ that finishes last by Corollary 22.8). Let $x$ be the vertex in $C'$ that finishes last. Since $x$ is a descendant of $r_1$ (since it is in $t$), $d(r_1) < d(x) < f(x) < f(r_1)$. Therefore, at time $d(r_1)$, $x$ is white. Thus, since we are ordering the vertices in reverse order of the finish times of the 1st pass and every root must be the smallest vertex at the time at which it is discovered, $f_1(r_1) > f_1(x)$.
+Therefore $f(C) > f(C')$. This contradicts Lemma 7.8 (Corollary 22.15 in CLRS).  
+\end{proof}
+\begin{theorem}
+Every tree $t$ in the DFS forest of the second pass is a SCC
+\end{theorem}
+\begin{proof}
+Assume not, so by Lemma 7.2, we can find a vertex $v$ but in $t$, but when added to $t$, the resulting set is still strongly connected. Let $t'$ be the tree that $v$ is in. Let $r$ be the root of $t$. Since the resulting set is strongly connected, there is a path from $v$ to $r$ and a path from $r$ to $v$. If $t$ is an earlier tree, the second path contradicts Lemma 7.9. If $t'$ is the earlier tree, the first path contradicts Lemma 7.9. Thus, such a vertex cannot exist, so the set is strongly connected.
+\end{proof}
 \end{document}
