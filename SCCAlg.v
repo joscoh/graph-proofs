@@ -13,128 +13,6 @@ Require Import DerivedProofs.
 Require Import SCCDef.
 Require Import Coq.Classes.RelationClasses.
 
-(*We can create  UsualOrdered instance of the finish times. This is a really annoying function of the
-  fact that Coq's modules do not support values as parameters, so we use a separate typeclass to define
-  an ordering, along with a set. (We need the set fo efficiency reasons: if we just pass in an ordering
-  function, it would take O(n) time to find the min each time we start a new tree. With a set, we can
-  do this in O(log n). But it makes everything more complicated*)
-(*
-Module ReverseFTime (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)
-  (D: DFSBase O S G F) .
-
-  Module GO := (Graph.GraphOrder O S G).
-  Import GO.
-
-
-End ReverseFTime.*)
-    
-(*
-(*In reality, our graoh is fixed, but Coq's modules do not seem to support a value parameter*)
-Module ReverseFTime (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)
-  (D: DFSBase O S G F) <: OrderedType.
-
-  Definition t : Type := {x : G.graph * G.vertex | G.contains_vertex (fst x) (snd x) = true}.
-
-  Definition eq (t1 t2 : t) := if G.Equal_dec (fst (proj1_sig t1)) (fst (proj1_sig t2)) then
-    D.f_time None (fst (proj1_sig t1)) (snd (proj1_sig t1)) = 
-         D.f_time None (fst (proj1_sig t2)) (snd (proj1_sig t2)) 
-    else False.
-
-  Definition lt (t1 t2 : t) :=
-    if G.Equal_dec (fst (proj1_sig t1)) (fst (proj1_sig t2)) 
-    then D.f_time None (fst (proj1_sig t1)) (snd (proj1_sig t1)) > 
-         D.f_time None (fst (proj1_sig t2)) (snd (proj1_sig t2)) 
-    else G.lt (fst (proj1_sig t1)) (fst (proj1_sig t2)).
-
-  Lemma eq_refl : forall x : t, eq x x.
-  Proof.
-    intros. unfold eq. destruct x as [x H]. destruct x as [g v]. simpl in *.
-    destruct (G.Equal_dec g g). omega. apply n. pose proof (G.Equal_equiv).
-    destruct H0 as [refl]. apply refl.
-  Qed.
-  
-  Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-  Proof.
-    intros. unfold eq in *. destruct x as [x1 H1]. destruct y as [y1 H2]. destruct x1 as [g1 v1].
-    destruct y1 as [g2 v2]. simpl in *. pose proof (G.Equal_equiv). destruct H0 as [refl sym trans].
-    destruct (G.Equal_dec g2 g1). destruct (G.Equal_dec g1 g2). omega. 
-    apply sym in e. contradiction. destruct (G.Equal_dec g1 g2). apply sym in e. contradiction. apply H.
-  Qed.
-
-  Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-  Proof.
-    intros. unfold eq in *. destruct x as [x1 H1]. destruct y as [y1 H2]. destruct z as [z1 H3].
-    destruct x1 as [g1 v1]. destruct y1 as [g2 v2]. destruct z1 as [g3 v3]. simpl in *.
-    pose proof (G.Equal_equiv). destruct H4 as [refl sym trans].
-    destruct (G.Equal_dec g1 g3). destruct (G.Equal_dec g1 g2). destruct (G.Equal_dec g2 g3). omega.
-    assert (G.Equal g2 g3). eapply trans. apply sym. apply e0. apply e. contradiction.
-    destruct H. destruct (G.Equal_dec g1 g2). destruct (G.Equal_dec g2 g3).
-    assert (G.Equal g1 g3). eapply trans. apply e. apply e0. contradiction. destruct H0. destruct H.
-  Qed. 
-
-  Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
-  Proof.
-    intros. destruct x. destruct y. destruct z. unfold lt in *. simpl in *.
-    destruct x as [g1 v1]. destruct x0 as [g2 v2]. destruct x1 as [g3 v3]. simpl in *.
-     pose proof G.Equal_equiv. destruct H1 as [refl sym trans].
-    destruct (G.Equal_dec g1 g2). destruct (G.Equal_dec g2 g3). 
-    destruct (G.Equal_dec g1 g3). omega.
-    assert (G.Equal g1 g3). eapply trans. apply e2. apply e3. contradiction.
-    destruct (G.Equal_dec g1 g3). assert (G.Equal g2 g3). eapply trans. eapply sym. apply e2.
-    apply e3. contradiction. eapply G.Equal_lt_l. apply e2. apply H0.
-    destruct (G.Equal_dec g1 g3). destruct (G.Equal_dec g2 g3). 
-    assert (G.Equal g1 g2). eapply trans. apply e2. apply sym. apply e3. contradiction.
-    assert (G.lt g2 g1). eapply G.Equal_lt_r. apply e2. apply H0.
-    assert (G.lt g1 g1). eapply G.lt_trans. apply H. apply H1. eapply G.lt_not_eq in H2.
-    exfalso. apply H2. apply refl. destruct (G.Equal_dec g2 g3). eapply G.Equal_lt_r. apply sym.
-    apply e2. apply H. eapply G.lt_trans. apply H. apply H0.
-  Qed.
-
- Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
-  Proof.
-    intros. intro. unfold lt in *. unfold eq in *. destruct x as [x A]. simpl in *.
-    destruct y as [y B]. destruct x as [g v]. destruct y as [g' v']. simpl in *.
-    destruct (G.Equal_dec g g'). omega. apply H0.
-  Qed.
-
- Definition compare : forall x y : t, Compare lt eq x y.
-  Proof.
-    intros. destruct x as [x1 H1]. destruct y as [y1 H2]. destruct x1 as [g1 v1]. destruct y1 as [g2 v2].
-    simpl in *. pose proof (G.Equal_equiv). destruct H as [r s t]. 
-    pose proof (G.compare g1 g2). destruct H.
-    - apply LT. unfold lt. simpl in *. destruct (G.Equal_dec g1 g2). apply G.lt_not_eq in l. 
-      contradiction. apply l.
-    - case_eq (Nat.compare (D.f_time None g1 v1) (D.f_time None g2 v2)); intro; simpl in *.
-      + apply EQ. unfold eq. simpl in *. destruct (G.Equal_dec g1 g2). apply nat_compare_eq in H. omega.
-        contradiction.
-      + apply GT. unfold lt. simpl in *. destruct (G.Equal_dec g2 g1). apply nat_compare_lt in H. omega.
-        apply s in e. contradiction.
-      + apply LT. unfold lt. simpl in *. destruct (G.Equal_dec g1 g2). apply nat_compare_gt in H. omega.
-        contradiction.
-    - apply GT. unfold lt. simpl in *. destruct (G.Equal_dec g2 g1). apply G.lt_not_eq in l. contradiction.
-      apply l.
-  Qed.
-
- Lemma eq_dec : forall x y : t, { eq x y } + { ~ eq x y }.
-  Proof.
-    intros. pose proof (compare x y). destruct H. right. intro. apply lt_not_eq in l. contradiction.
-    left. apply e. right. intro. apply lt_not_eq in l. apply eq_sym in H. contradiction.
-  Qed.
-
-End ReverseFTime.
-
- Parameter Inline t : Type.
- Definition eq := @eq t.
- Parameter Inline lt : t -> t -> Prop.
- Definition eq_refl := @eq_refl t.
- Definition eq_sym := @eq_sym t.
- Definition eq_trans := @eq_trans t.
- Axiom lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
- Axiom lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
- Parameter compare : forall x y : t, Compare lt eq x y.
- Parameter eq_dec : forall x y : t, { eq x y } + { ~ eq x y }.
-
-*)
 Module SCCAlg(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase)
   (D' : DFSCustomOrder).
 
@@ -146,8 +24,6 @@ Module SCCAlg(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: For
   Module Pa := SC.Pa.
   Import SC.
   
-
-
 (** Correctness of SCC algorithm **)
 
 (*Lemma 22.13 in CLRS*)
@@ -487,7 +363,6 @@ Proof.
     eapply max_elt_set_in_set in H3. apply H3. apply H9. intro. subst.
     eapply neq_scc_disjoint in H. apply H. split. unfold f_time_scc in H3.
     eapply max_elt_set_in_set in H3. apply H3. apply H8. apply A. apply B. omega.
-    (*WOOO *)
     destruct H7. assert (A:= Hc). assert (B:= Hc'). unfold scc in Hc. unfold scc in Hc'.
     destruct_all. unfold strongly_connected in s0. unfold strongly_connected in s. destruct_all.
     unfold f_time_scc in *. unfold d_time_scc in *.
@@ -1093,11 +968,4 @@ Qed.
 End SecondPass.
 
 End SCCAlg.
-
-
-
-
-
-
-
 
