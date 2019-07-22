@@ -123,6 +123,8 @@ Module Type Graph (O: UsualOrderedType)(S: FSetInterface.Sfun O).
   (forall v, contains_vertex g v = true <-> In v l) /\ NoDup l /\
   (forall l1 l2 l3 u v, l = l1 ++ u :: l2 ++ v :: l3 -> contains_edge g v u = false).
 
+  Definition undirected (g: graph) := forall u v, contains_edge g u v = true <-> contains_edge g v u = true. 
+
 
 End Graph.
 

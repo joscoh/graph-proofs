@@ -245,6 +245,186 @@ Proof.
     destruct_all. right. subst. exists x. exists (a :: x0). reflexivity.
 Qed.
 
+Module MinMax(O: UsualOrderedType) .
+
+(*Finding the minimum element in a list based on a given function*)
+Definition min_elt_list (l: list O.t) (f: O.t -> nat) : option O.t :=
+  fold_right (fun x s => match s with
+                     | None => Some x
+                     | Some y =>  if (f x <? f y) then Some x else s
+                     end) None l.
+
+Lemma min_elt_list_none_iff_empty: forall l f,
+  min_elt_list l f = None <-> l = nil.
+Proof.
+  intros. induction l; simpl in *; split; intros; try(reflexivity).
+  - destruct (min_elt_list l f) eqn : ?.
+    + destruct (f a <? f t); inversion H.
+    + inversion H.
+  - inversion H.
+Qed.
+
+Lemma min_elt_list_in_list: forall f x l,
+  min_elt_list l f = Some x ->
+  In x l.
+Proof.
+  intros. generalize dependent x. induction l; intros.
+  - simpl in H. inversion H.
+  - simpl in *. destruct (min_elt_list l f) eqn : ?.
+    + destruct (f a <? f t) eqn : ?; inversion H; subst. left. reflexivity. right. apply IHl.
+      reflexivity.
+    + inversion H; subst. left. reflexivity.
+Qed.
+
+Lemma min_elt_list_finds_min: forall f x l,
+  (forall x y, In x l -> In y l -> f x = f y -> x = y) ->
+  min_elt_list l f = Some x ->
+  forall y, In y l -> y <> x -> f x < f y.
+Proof.
+  intros. generalize dependent x. induction l; intros.
+  - destruct H1.
+  - simpl in H1. simpl in H0. destruct H1.
+    + subst. destruct (min_elt_list l f ) eqn : ?.
+      * destruct (f y <? f t ) eqn : ?.
+        -- inversion H0; subst. contradiction.
+        -- inversion H0; subst.  rewrite Nat.ltb_antisym in Heqb. simplify.
+        rewrite Nat.leb_le in Heqb. assert (f x < f y \/ f x = f y) by omega.
+        destruct H1. apply H1. apply H in H1. subst. contradiction. simpl. right.
+        eapply  min_elt_list_in_list. apply Heqo. left. reflexivity.
+      * inversion H0; subst. contradiction.
+    + destruct (min_elt_list l f) eqn : ?. destruct (f a <? f t ) eqn : ?.
+      * rewrite Nat.ltb_lt in Heqb. inversion H0; subst. destruct (O.eq_dec t y). unfold O.eq in e.
+        subst. apply Heqb. assert (f t < f y). apply IHl. intros. apply H; try(solve_in).
+        apply H1. reflexivity. auto. omega.
+      * inversion H0; subst.  rewrite Nat.ltb_antisym in Heqb. simplify.
+      * inversion H0; subst. rewrite min_elt_list_none_iff_empty in Heqo. subst. inversion H1.
+Qed.
+
+(*The same but for max/finish time*)
+
+Definition max_elt_list (l: list O.t) (f: O.t -> nat) : option O.t :=
+  fold_right (fun x s => match s with
+                     | None => Some x
+                     | Some y =>  if (f y <? f x) then Some x else s
+                     end) None l.
+
+Lemma max_elt_list_none_iff_empty: forall l f,
+  max_elt_list l f = None <-> l = nil.
+Proof.
+  intros. induction l; simpl in *; split; intros; try(reflexivity).
+  - destruct (max_elt_list l f) eqn : ?.
+    + destruct (f t <? f a); inversion H.
+    + inversion H.
+  - inversion H.
+Qed.
+
+Lemma max_elt_list_in_list: forall f x l,
+  max_elt_list l f = Some x ->
+  In x l.
+Proof.
+  intros. generalize dependent x. induction l; intros.
+  - simpl in H. inversion H.
+  - simpl in *. destruct (max_elt_list l f) eqn : ?.
+    + destruct (f t <? f a) eqn : ?; inversion H; subst. left. reflexivity. right. apply IHl.
+      reflexivity.
+    + inversion H; subst. left. reflexivity.
+Qed.
+
+Lemma max_elt_list_finds_max: forall f x l,
+  (forall x y, In x l -> In y l -> f x = f y -> x = y) ->
+  max_elt_list l f = Some x ->
+  forall y, In y l -> y <> x -> f y < f x.
+Proof.
+  intros. generalize dependent x. induction l; intros.
+  - destruct H1.
+  - simpl in H1. simpl in H0. destruct H1.
+    + subst. destruct (max_elt_list l f ) eqn : ?.
+      * destruct (f t <? f y ) eqn : ?.
+        -- inversion H0; subst. contradiction.
+        -- inversion H0; subst.  rewrite Nat.ltb_antisym in Heqb. simplify.
+        rewrite Nat.leb_le in Heqb. assert (f y < f x \/ f y = f x) by omega.
+        destruct H1. apply H1. apply H in H1. subst. contradiction. left. reflexivity.
+        right. eapply max_elt_list_in_list. apply Heqo.
+      * inversion H0; subst. contradiction.
+    + destruct (max_elt_list l f) eqn : ?. destruct (f t <? f a ) eqn : ?.
+      * rewrite Nat.ltb_lt in Heqb. inversion H0; subst. destruct (O.eq_dec t y). unfold O.eq in e.
+        subst. apply Heqb. assert (f y < f t). apply IHl. intros. apply H; try(solve_in). apply H1.
+        reflexivity. auto. omega.
+      * inversion H0; subst.  rewrite Nat.ltb_antisym in Heqb. simplify.
+      * inversion H0; subst. rewrite max_elt_list_none_iff_empty in Heqo. subst. inversion H1.
+Qed.
+
+Definition min_elt_path (u v : O.t) (f: O.t -> nat) l :=
+  match (min_elt_list l f) with
+  | Some x => if f u <? f x then 
+                if f u <? f v then u 
+                else v
+             else if f v <? f x then v else x
+  | None => if f u <? f v then u else v
+  end.
+
+Ltac destruct_if := 
+  match goal with
+  | [H : (if ?a <? ?b then _ else _) = _ |- _ ] => (destruct (a <? b) eqn : ?)
+  end.
+
+Lemma min_elt_path_in: forall u v l f x,
+  min_elt_path u v f l = x ->
+  x = u \/ x = v \/ In x l.
+Proof.
+  intros. unfold min_elt_path in H. destruct (min_elt_list l f) eqn : ?.
+  repeat(destruct_if; try(simplify)). subst.
+  right. right. apply min_elt_list_in_list in Heqo. assumption.
+  destruct_if; inversion H; simplify.
+Qed.
+
+(** Finding the minimum element of a path **)
+(*Because a path has the start, end, and intermediate list, this basically boils down to a ton of cases*)
+Lemma min_elt_path_finds_min: forall u v l f x,
+  (forall x0 y0 : O.t, (u = x0 \/ v = x0 \/ In x0 l) -> (u = y0 \/ v = y0 \/ In y0 l) -> f x0 = f y0 -> x0 = y0) ->
+  ~In u l -> ~In v l -> u <> v ->
+  min_elt_path u v f l = x ->
+  (forall y, y = u \/ y = v \/ In y l -> y <> x -> f x < f y).
+Proof.
+  intros. unfold min_elt_path in H3. destruct (min_elt_list l f) eqn : ?.
+  repeat((destruct_if); repeat(rewrite Nat.ltb_lt in *)); subst.
+  simplify; subst; try(assumption); try(omega). destruct (O.eq_dec y t). unfold O.eq in e. subst.
+  assumption. eapply min_elt_list_finds_min in Heqo. assert (f t < f y) by apply Heqo. omega.
+  intros; apply H; try(right; right; assumption); assumption. apply H4. auto.
+  assert (f x < f u). { rewrite Nat.ltb_antisym in Heqb0. rewrite negb_false_iff in Heqb0.
+  apply Nat.leb_le in Heqb0. assert ( f x < f u \/ f x = f u) by omega. destruct H3. apply H3.
+  apply H in H3. subst. contradiction. right. left. reflexivity. left. reflexivity. }
+  clear Heqb0. simplify; subst; try(assumption); try(omega).
+  destruct (O.eq_dec t y). unfold O.eq in e. subst. omega. eapply min_elt_list_finds_min in Heqo.
+  assert (f t < f y) by apply Heqo. omega. intros; apply H; try(right; right; assumption); assumption. 
+  apply H4. auto. assert (f t < f u). { rewrite Nat.ltb_antisym in Heqb. rewrite negb_false_iff in Heqb.
+  apply Nat.leb_le in Heqb. assert (f t < f u \/ f t = f u) by omega. destruct H3.
+  apply H3. subst. eapply H in H3. subst. apply min_elt_list_in_list in Heqo. contradiction.
+  right. right. apply min_elt_list_in_list in Heqo; assumption. left. reflexivity. }
+  clear Heqb.  simplify; subst; try(assumption); try(omega). destruct (O.eq_dec y t). unfold O.eq in e.
+  subst. omega. eapply min_elt_list_finds_min in Heqo. assert (f t < f y) by apply Heqo. omega.
+  intros; apply H; try(right; right; assumption); assumption.  apply H4. auto.
+  assert ( f x < f v). { rewrite Nat.ltb_antisym in Heqb0. rewrite negb_false_iff in Heqb0.
+  apply Nat.leb_le in Heqb0. assert ( f x < f v \/ f x = f v) by omega. destruct H3. apply H3.
+  apply H in H3. subst. apply min_elt_list_in_list in Heqo. contradiction. right. right.
+  eapply min_elt_list_in_list. apply Heqo. right. left. reflexivity. } clear Heqb0.
+  assert ( f x < f u). { rewrite Nat.ltb_antisym in Heqb. rewrite negb_false_iff in Heqb.
+  apply Nat.leb_le in Heqb. assert (f x < f u \/ f x = f u) by omega. destruct H6.
+  apply H6. subst. eapply H in H6. subst. apply min_elt_list_in_list in Heqo. contradiction.
+  right. right. apply min_elt_list_in_list in Heqo; assumption. left. reflexivity. }
+  clear Heqb. simplify; subst; try(assumption); try(omega).
+  eapply min_elt_list_finds_min in Heqo. apply Heqo.  intros; apply H; try(right; right; assumption).
+  assumption. assumption. auto. destruct_if; repeat( rewrite Nat.ltb_lt in *); subst.
+  simplify; subst; try(assumption); try(omega). apply min_elt_list_none_iff_empty in Heqo. subst.
+  inversion H4. assert (f x < f u). { rewrite Nat.ltb_antisym in Heqb. rewrite negb_false_iff in Heqb.
+  apply Nat.leb_le in Heqb. assert ( f x < f u \/ f x = f u) by omega. destruct H3. apply H3.
+  apply H in H3. subst. contradiction. right. left. reflexivity. left. reflexivity. }
+  clear Heqb. simplify; subst; try(assumption); try(omega).  
+  apply min_elt_list_none_iff_empty in Heqo. subst. inversion H4.
+Qed.
+
+End MinMax.
+
 
 
 

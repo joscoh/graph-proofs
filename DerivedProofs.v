@@ -9,6 +9,7 @@ Require Import Helper.
 Require Import Coq.Arith.PeanoNat.
 Require Import Omega.
 Require Import Coq.Lists.ListDec.
+Require Import SCCDef.
 
 (* This module consists of proofs of both properties and applications of DFS that use only the specification
     defined in DFSBase and thus are independent of any actual DFS algorithm. The significant results include
@@ -23,6 +24,10 @@ Require Import Coq.Lists.ListDec.
 Module DerivedProofs(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase O S G F).
 
 Module P:= D.P. 
+Module P2 := FSetProperties.WProperties_fun O S.
+Module O2 := OrderedTypeFacts O.
+Module M := (Helper.MinMax O).
+Module SD := (SCCDef.SCCDef O S G).
 
 Lemma desc_implies_path: forall g o u v l,
   F.desc_list (D.dfs_forest o g) u v l = true ->
@@ -346,6 +351,374 @@ Proof.
   rewrite D.rev_f_time_def in H3. apply (finish_time_edge g o v u) in Heqb.
   omega. apply H. reflexivity.
 Qed. 
+
+(** General Results about DFS Trees and their times **)
+
+(*TODO: This is more or less copy and pasted from SCCAlg. Try to see if I can reduce the copy and pasting*)
+Lemma get_tree_in_graph: forall g o v t,
+  InA S.Equal t (F.get_trees (D.dfs_forest o g)) ->
+  S.In v t ->
+  G.contains_vertex g v = true.
+Proof.
+  intros. eapply F.get_trees_root in H. destruct H. destruct_all. destruct (O.eq_dec v x).
+  unfold O.eq in e. subst. eapply D.same_vertices. apply F.is_root_5. apply H.
+  rewrite H2 in H0. apply F.desc_in_forest in H0. eapply D.same_vertices. apply H0. auto.
+Qed.
+
+Lemma get_trees_partition_graph : forall o g,
+  P.partition G.contains_vertex g (F.get_trees (D.dfs_forest o g)). 
+Proof.
+  intros. unfold P.partition. pose proof (F.get_trees_partition (D.dfs_forest o g)).
+  unfold F.P.partition in H. destruct_all. split. intros. apply H.
+  apply D.same_vertices. apply H1. apply H0.
+Qed.
+
+(*Given two DFS trees t1 and t2 with roots r1 and r2, r1 is discovered before r2 iff it
+  finishes before r2*)
+Lemma root_times: forall g o t1 t2 r1 r2,
+  InA S.Equal t1 (F.get_trees (D.dfs_forest o g)) ->
+  InA S.Equal t2 (F.get_trees (D.dfs_forest o g)) ->
+  S.In r1 t1 ->
+  S.In r2 t2 ->
+  F.is_root (D.dfs_forest o g) r1 = true ->
+  F.is_root (D.dfs_forest o g) r2 = true ->
+  D.f_time o g r1 < D.f_time o g r2 <-> D.d_time o g r1 < D.d_time o g r2.
+Proof.
+  intros. assert (G.contains_vertex g r1 = true). eapply get_tree_in_graph. apply H. assumption.
+  assert (G.contains_vertex g r2 = true). eapply get_tree_in_graph. apply H0. assumption.
+  destruct (O.eq_dec r1 r2). unfold O.eq in e. subst. omega.
+  assert (r1 <> r2) by auto. clear n. pose proof (D.parentheses_theorem o g r1 r2 H5 H6 H7).
+  destruct H8.
+  - assert (F.desc (D.dfs_forest o g) r1 r2). eapply D.descendant_iff_interval; try(assumption); try(omega).
+    eapply F.root_no_desc in H4. exfalso. apply H4. apply H9. eapply D.same_vertices. assumption.
+  - destruct H8.
+    + assert (F.desc (D.dfs_forest o g) r2 r1). eapply D.descendant_iff_interval; try(assumption); try(omega).
+      eapply F.root_no_desc in H3. exfalso. apply H3. apply H9. eapply D.same_vertices. assumption.
+    + omega.
+Qed.
+
+(*Given 2 DFS trees t1 and t2 and roots r1 and r2, if r1 finishes before r2, then r1 finishes before r2 starts*)
+Lemma root_start_end: forall g o t1 t2 r1 r2,
+  InA S.Equal t1 (F.get_trees (D.dfs_forest o g)) ->
+  InA S.Equal t2 (F.get_trees (D.dfs_forest o g)) ->
+  S.In r1 t1 ->
+  S.In r2 t2 ->
+  F.is_root (D.dfs_forest o g) r1 = true ->
+  F.is_root (D.dfs_forest o g) r2 = true ->
+  D.f_time o g r1 < D.f_time o g r2 ->
+  D.f_time o g r1 < D.d_time o g r2.
+Proof.
+  intros. assert (G.contains_vertex g r1 = true). eapply get_tree_in_graph. apply H. assumption.
+  assert (G.contains_vertex g r2 = true). eapply get_tree_in_graph. apply H0. assumption.
+  destruct (O.eq_dec r1 r2). unfold O.eq in e. subst. omega.
+  assert (r1 <> r2) by auto. clear n. pose proof (D.parentheses_theorem o g r1 r2 H6 H7 H8).
+  destruct H9.
+  - assert (F.desc (D.dfs_forest o g) r1 r2). eapply D.descendant_iff_interval; try(assumption); try(omega).
+    eapply F.root_no_desc in H4. exfalso. apply H4. apply H10. eapply D.same_vertices. assumption.
+  - destruct H9.
+    + assert (F.desc (D.dfs_forest o g) r2 r1). eapply D.descendant_iff_interval; try(assumption); try(omega).
+      eapply F.root_no_desc in H3. exfalso. apply H3. apply H10. eapply D.same_vertices. assumption.
+    + omega.
+Qed.
+    
+(*Let t1 and t2 be 2 DFS trees with roots r1 and r2. Let u be in t1 and v be in t2. Then u finishes
+  before v is discovered*)
+Lemma tree_times: forall g o t1 t2 u v r1 r2,
+  InA S.Equal t1 (F.get_trees (D.dfs_forest o g)) ->
+  InA S.Equal t2 (F.get_trees (D.dfs_forest o g)) ->
+  S.In r1 t1 ->
+  S.In r2 t2 ->
+  F.is_root (D.dfs_forest o g) r1 = true ->
+  F.is_root (D.dfs_forest o g) r2 = true ->
+  D.f_time o g r1 < D.f_time o g r2 ->
+  S.In u t1 ->
+  S.In v t2 ->
+  D.f_time o g u < D.d_time o g v.
+Proof.
+  intros. assert (G.contains_vertex g u = true).
+  eapply get_tree_in_graph. apply H. apply H6.
+  assert (G.contains_vertex g v = true). eapply get_tree_in_graph. apply H0. apply H7.
+  assert (A :~S.In v t1 /\ ~S.In u t2). { split; intro;
+  pose proof (get_trees_partition_graph o g); unfold P.partition in H11;
+  destruct_all; specialize (H12 t1 t2); destruct (S.equal t1 t2) eqn : ?.
+  - apply S.equal_2 in Heqb; rewrite <- Heqb in H2.  assert (r1 = r2). { eapply F.tree_root_unique.
+    apply H. apply H3. apply H4. apply H1. apply H2. } subst. omega.
+  - assert (P.disjoint t1 t2). apply H12. reflexivity. assumption. assumption. unfold P.disjoint in H13.
+    apply (H13 v). split; assumption.
+  - apply S.equal_2 in Heqb; rewrite <- Heqb in H2.  assert (r1 = r2). { eapply F.tree_root_unique.
+    apply H. apply H3. apply H4. apply H1. apply H2. } subst. omega.
+  - assert (P.disjoint t1 t2). apply H12. reflexivity. assumption. assumption. unfold P.disjoint in H13.
+    apply (H13 u). split; assumption. }
+  assert (u <> v). { intro. subst. destruct_all. contradiction. }
+  pose proof (D.parentheses_theorem o g u v H8 H9 H10). destruct H11.
+  - assert (F.desc (D.dfs_forest o g) u v). eapply D.descendant_iff_interval. apply H8.
+    apply H9. omega. assert (F.desc (D.dfs_forest o g) r1 v). { assert (R:=H).
+    apply F.get_trees_root in H. destruct_all. assert (x = r1). eapply F.tree_root_unique.
+    apply R. all: try(assumption). subst. destruct (O.eq_dec u r1). unfold O.eq in e. subst. assumption.
+    eapply F.is_descendant_trans. apply (H18 u). auto. assumption. assumption. }
+    assert (S.In v t1). { assert (R:=H).
+    apply F.get_trees_root in H. destruct_all. assert (x = r1). eapply F.tree_root_unique.
+    apply R. assumption. assumption. assumption. assumption. subst. destruct (O.eq_dec v r1). unfold O.eq in e.
+    subst. assumption. apply H19. auto. assumption. } destruct_all; contradiction.
+  - destruct H11.
+    +  assert (F.desc (D.dfs_forest o g) v u). eapply D.descendant_iff_interval. apply H9.
+    apply H8. omega. assert (F.desc (D.dfs_forest o g) r2 u). { assert (R:=H0).
+    apply F.get_trees_root in H0. destruct_all. assert (x = r2). eapply F.tree_root_unique.
+    apply R. all: try(assumption). subst. destruct (O.eq_dec v r2). unfold O.eq in e. subst. assumption.
+    eapply F.is_descendant_trans. apply (H18 v). auto. assumption. assumption. }
+    assert (S.In u t2). { assert (R:=H0).
+    apply F.get_trees_root in H0. destruct_all. assert (x = r2). eapply F.tree_root_unique.
+    apply R. assumption. assumption. assumption. assumption. subst. destruct (O.eq_dec u r2). unfold O.eq in e.
+    subst. assumption. apply H19. auto. assumption. } destruct_all; contradiction.
+    + destruct H11.
+      * omega.
+      * assert (R1 := H). assert (R2 := H0). eapply F.get_trees_root in H. eapply F.get_trees_root in H0.
+        destruct_all. assert (x0 = r1). eapply F.tree_root_unique. apply R1. all: try(assumption). subst.
+        assert (x = r2). eapply F.tree_root_unique. apply R2. all: try(assumption). subst.
+        destruct (O.eq_dec u r1). unfold O.eq in e. subst. destruct (O.eq_dec v r2). unfold O.eq in e. subst.
+        omega. assert (F.desc (D.dfs_forest o g) r2 v). eapply H17. auto. assumption.
+        eapply D.descendant_iff_interval in H20. assert (D.d_time o g r1 < D.d_time o g r2).
+        eapply root_times. apply R1. apply R2. all: try(assumption). omega. eapply get_tree_in_graph.
+        apply R2. assumption. 
+        assert (F.desc (D.dfs_forest o g) r1 u). eapply H19. auto. assumption.
+        eapply D.descendant_iff_interval in H20. assert (D.d_time o g r1 < D.d_time o g r2).
+        eapply root_times. apply R1. apply R2. all: try(assumption). destruct (O.eq_dec v r2). unfold O.eq in e.
+        subst. omega.  assert (F.desc (D.dfs_forest o g) r2 v). eapply H17. auto. assumption.
+        eapply D.descendant_iff_interval in H22. eapply root_start_end in H5. omega. apply R1. apply R2.
+        all: try(assumption). eapply get_tree_in_graph. apply R2. assumption. 
+        eapply get_tree_in_graph. apply R1. assumption.
+Qed. 
+
+(*Every path has a vertex along it that was discovered first*)
+Lemma path_has_first_discovered: forall o g u v l,
+  P.path_list_rev g u v l = true ->
+  NoDup l -> ~In u l -> ~In v l ->
+   u <> v ->
+  exists x, (x = u \/ x = v \/ In x l) /\ (forall y,  (y = u \/ y = v \/ In y l) ->y <> x ->
+  D.d_time o g x < D.d_time o g y).
+Proof.
+  intros. 
+  remember (M.min_elt_path u v (D.d_time o g) l) as y.
+  exists y. split. symmetry in Heqy. eapply M.min_elt_path_in in Heqy. simplify. 
+  eapply M.min_elt_path_finds_min. intros.
+  pose proof (P.path_implies_in_graph g u v l H).
+  apply (D.d_times_unique o g x0 y0). destruct H4. subst. simplify. destruct H4; subst; simplify.
+  destruct H5. subst. simplify. destruct H5; subst; simplify. apply H6. 
+  all: symmetry in Heqy; assumption.
+Qed.
+
+(*Important lemma characterizing DFS trees. TODO: try to see about not having to repeat it all for SCC*)
+(*The proof turns out to be quite complicated.
+  Essentially, assume there is a path and let x be the element in the path that is first discovered.
+  If x is in t2 (the later tree), this contradicts the fact that u, the starting vertex, was in an
+  earlier tree. If x is in an earlier tree, then v (the end vertex) becomes a descendant of x by
+  the white path theorem, so v is in an earlier tree, which contradicts the fact that any two
+  DFS trees are djsoint.*)
+Lemma no_path_to_later_tree: forall o g t1 t2 r1 r2 u v,
+  InA S.Equal t1 (F.get_trees (D.dfs_forest o g)) ->
+  InA S.Equal t2 (F.get_trees (D.dfs_forest o g)) ->
+  S.In r1 t1 ->
+  S.In r2 t2 ->
+  F.is_root (D.dfs_forest o g) r1 = true ->
+  F.is_root (D.dfs_forest o g) r2 = true ->
+  D.f_time o g r1 < D.f_time o g r2 ->
+  S.In u t1 ->
+  S.In v t2 ->
+  ~P.path g u v.
+Proof.
+  intros. intro. assert (D.f_time o g u < D.d_time o g v). eapply tree_times.
+  apply H. apply H0. apply H1. apply H2. all: try assumption.
+  assert (G.contains_vertex g v = true). eapply get_tree_in_graph. apply H0. assumption.
+  assert (G.contains_vertex g u = true). eapply get_tree_in_graph. apply H. assumption.
+  assert (A :~S.In v t1 /\ ~S.In u t2). { split; intro;
+  pose proof (get_trees_partition_graph o g); unfold P.partition in H13;
+  destruct_all; specialize (H14 t1 t2); destruct (S.equal t1 t2) eqn : ?.
+  - apply S.equal_2 in Heqb; rewrite <- Heqb in H2.  assert (r1 = r2). { eapply F.tree_root_unique.
+    apply H. all: try assumption. }  subst. omega.
+  - assert (P.disjoint t1 t2). apply H14. reflexivity. assumption. assumption. unfold P.disjoint in H15.
+    apply (H15 v). split; assumption.
+  - apply S.equal_2 in Heqb; rewrite <- Heqb in H2.  assert (r1 = r2). { eapply F.tree_root_unique.
+    apply H. all: try assumption. }  subst. omega.
+  - assert (P.disjoint t1 t2). apply H14. reflexivity. assumption. assumption. unfold P.disjoint in H15.
+    apply (H15 u). split; assumption. } destruct A as [N1 N2].
+  assert (N: u <> v). intro. subst. contradiction.
+  rewrite P.path_path_list_rev in H8. destruct H8 as [l]. eapply P.path_no_dups in H8.
+  destruct H8 as [ld]. destruct_all. assert (A:= H8). apply (path_has_first_discovered o _ _ _ ) in A.
+  destruct A as [fst]. destruct_all. assert (R1 := H). assert (R2 := H0). eapply F.get_trees_root in H.
+  destruct H as [x]. destruct H as [HR1 HI1]. destruct HI1 as [HI1 HD1]. assert (x = r1). eapply F.tree_root_unique.
+  apply R1. all: try assumption. subst. eapply F.get_trees_root in H0. destruct H0 as [x]. destruct H as [HR2 HI2].
+  destruct HI2 as [HI2 HD2]. assert (x = r2). eapply F.tree_root_unique. apply R2. all: try assumption. subst. 
+  clear HR1. clear HR2. clear HI1. clear HI2. 
+  destruct H16. subst. 
+  - assert (F.desc (D.dfs_forest o g) u v). { eapply D.white_path_theorem. apply H11. intros.
+    exists ld. rewrite D.P.path_list_ind_rev. split. apply H8. split.
+    + intros. rewrite D.white_def. rewrite H. rewrite Nat.ltb_lt. apply H17. simplify. intro. subst. contradiction.
+    + rewrite D.white_def. rewrite H. rewrite Nat.ltb_lt. apply H17. simplify. intro. subst. contradiction. }
+   assert (F.desc (D.dfs_forest o g) r1 v). destruct (O.eq_dec r1 u). unfold O.eq in e. subst.
+   assumption. eapply F.is_descendant_trans. apply (HD1 u). auto. assumption. assumption.
+   rewrite <- HD1 in H0. contradiction. intro. subst. contradiction.
+  - destruct H. 
+    + subst. specialize (H17 u). assert (D.d_time o g v < D.d_time o g u).
+      apply H17. left. reflexivity. apply N.
+      assert (D.d_time o g u < D.f_time o g u). 
+      pose proof (D.parentheses_theorem o g u v H11 H10 N). omega. omega.
+    + destruct (P2.In_dec fst t2).
+      * specialize (H17 u). assert (D.d_time o g fst < D.d_time o g u).
+        apply H17. left. reflexivity. intro. subst. contradiction.
+        assert (D.f_time o g u < D.d_time o g fst). eapply tree_times.
+        apply R1. apply R2. apply H1. apply H2. all: try assumption.
+        assert (D.d_time o g u < D.f_time o g u). 
+        pose proof (D.parentheses_theorem o g u v H11 H10 N). omega. omega.
+      * assert (G.contains_vertex g fst = true). eapply P.path_implies_in_graph.
+        apply H8. apply H. pose proof (get_trees_partition_graph o g).
+        unfold P.partition in H16. destruct H16. specialize (H16 _ H0). destruct H16 as [t3].
+        destruct H16 as [R3 H16]. assert (A:= R3). eapply F.get_trees_root in A. destruct A as [r3].
+        destruct H19 as [HR3 HI3]. destruct HI3 as [HI3 HD3].
+        assert (D.f_time o g r3 > D.f_time o g r2 \/ D.f_time o g r3 = D.f_time o g r2 \/
+                D.f_time o g r3 < D.f_time o g r2) by omega.
+        destruct H19.
+        -- assert (D.f_time o g r2 < D.d_time o g r3). eapply root_start_end.
+           apply R2. apply R3. all: try assumption. 
+           destruct (O.eq_dec v r2). unfold O.eq in e. subst. destruct (O.eq_dec fst r3). unfold O.eq in e.
+           subst. specialize (H17 r2). assert (D.d_time o g r3 < D.d_time o g r2).
+           apply H17. simplify. intro. subst. contradiction. 
+           assert (D.d_time o g r2 < D.f_time o g r2). assert (r2 <> u) by auto.
+           pose proof (D.parentheses_theorem o g r2 u H10 H11 H22). omega. omega.
+           assert (F.desc (D.dfs_forest o g ) r3 fst). apply HD3. auto. assumption.
+           apply D.descendant_iff_interval in H21. specialize (H17 r2).
+           assert (D.d_time o g fst < D.d_time o g r2). apply H17. simplify.
+           intro. subst. contradiction. 
+            assert (D.d_time o g r2 < D.f_time o g r2). assert (r2 <> u) by auto.
+           pose proof (D.parentheses_theorem o g r2 u H10 H11 H23). omega. omega.
+           eapply get_tree_in_graph. apply R3. assumption. assumption.
+           assert (F.desc (D.dfs_forest o g) r2 v). apply HD2. auto. assumption.
+           eapply D.descendant_iff_interval in H21. destruct (O.eq_dec fst r3). unfold O.eq in e. subst.
+            specialize (H17 v). assert (D.d_time o g r3 < D.d_time o g v). apply H17.
+            simplify. intro. subst. contradiction. omega.
+            assert (F.desc (D.dfs_forest o g) r3 fst). apply HD3. auto. assumption.
+            apply D.descendant_iff_interval in H22. specialize (H17 v).
+            assert (D.d_time o g fst < D.d_time o g v). apply H17. simplify.
+            intro. subst. contradiction.  omega. eapply get_tree_in_graph. apply R3. assumption.
+            assumption. eapply get_tree_in_graph. apply R2. assumption. assumption.
+        -- destruct H19.
+           ++ assert (r3 = r2). eapply D.f_times_unique. eapply get_tree_in_graph. apply R3. assumption.
+              eapply get_tree_in_graph. apply R2. assumption. apply H19. subst.
+              destruct (S.equal t2 t3) eqn : ?. apply S.equal_2 in Heqb. rewrite Heqb in n. contradiction.
+              apply H18 in Heqb. unfold P.disjoint in Heqb. apply (Heqb r2). split; assumption.
+              assumption. assumption.
+           ++ assert (A:= H). eapply in_split_app_fst in A. destruct A as [l1]. destruct H20 as  [l2].
+              destruct H20; subst. apply P.path_app in H8. destruct H8 as [HP1 HP2].
+              assert (F.desc (D.dfs_forest o g) fst v). eapply D.white_path_theorem.
+              assumption. intros. exists l1. rewrite D.P.path_list_ind_rev. split.
+              assumption. split. intros. rewrite D.white_def. rewrite H8. rewrite Nat.ltb_lt.
+              apply H17. simplify. intro. subst. apply (H21 fst). apply H20. reflexivity.
+              rewrite D.white_def. rewrite H8. rewrite Nat.ltb_lt. apply H17. simplify.
+              intro. subst. contradiction. destruct (O.eq_dec fst r3). unfold O.eq in e. subst.
+              rewrite <- HD3 in H8. destruct (S.equal t2 t3) eqn : ?. apply S.equal_2 in Heqb.
+              rewrite Heqb in n. contradiction. apply H18 in Heqb. unfold P.disjoint in Heqb.
+              apply (Heqb v). split; assumption. assumption. assumption. intro. subst. contradiction.
+              assert (F.desc (D.dfs_forest o g) r3 v). eapply F.is_descendant_trans. apply (HD3 fst).
+              auto. assumption. assumption. rewrite <- HD3 in H20. destruct (S.equal t2 t3) eqn : ?.
+              apply S.equal_2 in Heqb. rewrite Heqb in n. contradiction. apply H18 in Heqb.
+              unfold P.disjoint in Heqb. apply (Heqb v). split; assumption. assumption. assumption.
+              intro. subst. apply F.desc_neq in H20. contradiction. apply O.eq_dec.
+Qed.
+Import SD.
+(** ** Finding Connected Components **)
+Lemma desc_path: forall o g u v l,
+  u <> v ->
+  F.desc_list (D.dfs_forest o g) u v l = true ->
+  Pa.path_list_rev g u v l = true.
+Proof.
+  intros. generalize dependent v. induction l; intros; simpl in *.
+  - eapply D.same_edges. apply H0.
+  - simplify. eapply D.same_edges. apply H1. apply IHl. intros. eapply F.desc_neq.
+    rewrite <- F.desc_list_iff_desc. exists l. apply H2. auto. apply H2.
+Qed. 
+
+Lemma path_equiv: forall g u v,
+  Pa.path g u v <-> P.path g u v.
+Proof.
+  intros. split; intros; induction H; try(constructor; assumption).
+  - eapply P.p_continue. apply IHpath. apply H0.
+  - eapply Pa.p_continue. apply IHpath. apply H0.
+Qed.
+
+Lemma undirected_path_iff: forall g u v,
+  G.undirected g ->
+  Pa.path g u v <-> Pa.path g v u.
+Proof.
+  intros. split; intros.
+  - induction H0.
+    + constructor. apply H. apply H0.
+    + eapply Pa.path_trans. apply Pa.p_start. apply H. apply H1. apply IHpath. apply H.
+  - induction H0.
+    + constructor. apply H. apply H0.
+    + eapply Pa.path_trans. apply Pa.p_start. apply H. apply H1. apply IHpath. apply H.
+Qed.
+
+(*For an undirected graph, SCCs and connected components are identical. We prove that every tree in the DFS
+  forest of an undirected graph is an SCC*)
+Lemma undirected_tree_connected: forall g o t,
+  G.undirected g ->
+  InA S.Equal t (F.get_trees (D.dfs_forest o g)) ->
+  strongly_connected t g.
+Proof.
+  intros.  assert (A:= H0). apply F.get_trees_root in H0. destruct_all.
+  unfold strongly_connected. split. destruct (S.is_empty t) eqn : ?.
+  apply S.is_empty_2 in Heqb. apply P2.empty_is_empty_1 in Heqb. rewrite Heqb in H1.
+  rewrite P2.Dec.F.empty_iff in H1. destruct H1. reflexivity. split.
+  intros. eapply get_tree_in_graph. apply A. apply H3. intros.
+  destruct (O.eq_dec x x0). unfold O.eq in e. subst.
+  rewrite H2 in H4. rewrite <- F.desc_list_iff_desc in H4. destruct H4 as [l].
+  rewrite Pa.path_path_list_rev. exists l. eapply desc_path. auto. apply H4. auto.
+  destruct (O.eq_dec x y). unfold O.eq in e. subst. rewrite (undirected_path_iff g x0 y).
+  apply H2 in H3. rewrite <- F.desc_list_iff_desc in H3. destruct H3 as [l].
+  rewrite Pa.path_path_list_rev. exists l. eapply desc_path. auto. apply H3. auto.
+  assumption. assert (Pa.path g x0 x). rewrite undirected_path_iff. apply H2 in H3.
+  rewrite <- F.desc_list_iff_desc in H3. destruct H3 as [l]. rewrite Pa.path_path_list_rev.
+  exists l. eapply desc_path. auto. apply H3. auto. assumption. 
+  eapply Pa.path_trans. apply H6. apply H2 in H4. rewrite <- F.desc_list_iff_desc in H4.
+  destruct H4 as [l]. rewrite Pa.path_path_list_rev. exists l. eapply desc_path. auto. apply H4.
+  auto.
+Qed.
+
+(*For undirected graphs, each DFS tree found is a separate connected component*)
+Theorem undirected_dfs_finds_ccs: forall g o t,
+  G.undirected g ->
+  InA S.Equal t (F.get_trees (D.dfs_forest o g)) ->
+  scc t g.
+Proof.
+  intros. pose proof (undirected_tree_connected g o t H H0).
+  destruct (scc_dec t g). apply s. pose proof (non_scc_has_another t g H1 n).
+  destruct H2 as [v]. destruct H2. assert (R:= H0). apply F.get_trees_root in H0. destruct H0 as [r1].
+  destruct_all. pose proof (get_trees_partition_graph o g). unfold P.partition in H6.
+  destruct H6. assert (G.contains_vertex g v = true). { unfold strongly_connected in H3. apply H3.
+  apply S.add_1. reflexivity. } specialize (H6 _ H8). destruct H6 as [t2]. destruct H6.
+  assert (R2 := H6). apply F.get_trees_root in H6. destruct H6 as [r2]. destruct_all.
+  unfold strongly_connected in H3. destruct_all.
+  assert (r1 <> v). intro. subst. pose proof (get_trees_partition_graph o g).
+  unfold P.partition in H14. destruct H14. destruct (S.equal t t2) eqn : ?. apply S.equal_2 in Heqb.
+  rewrite Heqb in H2. contradiction. apply H15 in Heqb. unfold P.disjoint in Heqb.
+  apply (Heqb v). split; assumption. assumption. assumption.
+  assert (Pa.path g r1 v). apply H13. apply S.add_2. assumption. apply S.add_1. reflexivity. apply H14.
+  assert (Pa.path g v r1). apply H13. apply S.add_1. reflexivity. apply S.add_2. assumption. auto.  
+  assert (D.f_time o g r1 < D.f_time o g r2 \/
+          D.f_time o g r1 = D.f_time o g r2 \/
+          D.f_time o g r1 > D.f_time o g r2) by omega.
+  destruct H17.
+  - exfalso. eapply no_path_to_later_tree. apply R. apply R2. apply H4. apply H10. assumption.
+    assumption. assumption. apply H4. apply H9. apply path_equiv. apply H15.
+  - destruct H17.
+    + assert (r1 = r2). eapply D.f_times_unique. eapply get_tree_in_graph. apply R.
+      assumption. eapply get_tree_in_graph. apply R2. assumption. apply H17. subst.
+      pose proof (get_trees_partition_graph o g).
+      unfold Pa.partition in H18. destruct H18. destruct (S.equal t t2) eqn : ?. apply S.equal_2 in Heqb.
+      rewrite Heqb in H2. contradiction. apply H19 in Heqb. unfold P.disjoint in Heqb.
+      exfalso. apply (Heqb r2). split; assumption. all: try assumption.
+    + exfalso. eapply no_path_to_later_tree. apply R2. apply R. apply H10. apply H4. assumption.
+      assumption. assumption. apply H9. apply H4. apply path_equiv. apply H16.
+Qed.
 
 End DerivedProofs.
 
