@@ -21,13 +21,14 @@ Require Import SCCDef.
       u is a descendant of v in the DFS forest). This does not yet give a cycle detection algorithm
     - A proof of the CLRS topological sorting algorithm: A list of vertices sorted in reverse order of their
       finish times is topologically sorted*)
-Module DerivedProofs(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase O S G F).
+Module DerivedProofs(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S)(D: DFSBase O S G F).
 
 Module P:= D.P. 
 Module P2 := FSetProperties.WProperties_fun O S.
 Module O2 := OrderedTypeFacts O.
 Module M := (Helper.MinMax O).
 Module SD := (SCCDef.SCCDef O S G).
+Module Pa := (Helper.Partition O S).
 
 Lemma desc_implies_path: forall g o u v l,
   F.desc_list (D.dfs_forest o g) u v l = true ->
@@ -366,9 +367,9 @@ Proof.
 Qed.
 
 Lemma get_trees_partition_graph : forall o g,
-  P.partition G.contains_vertex g (F.get_trees (D.dfs_forest o g)). 
+  Pa.partition G.contains_vertex g (F.get_trees (D.dfs_forest o g)). 
 Proof.
-  intros. unfold P.partition. pose proof (F.get_trees_partition (D.dfs_forest o g)).
+  intros. unfold Pa.partition. pose proof (F.get_trees_partition (D.dfs_forest o g)).
   unfold F.P.partition in H. destruct_all. split. intros. apply H.
   apply D.same_vertices. apply H1. apply H0.
 Qed.
@@ -439,15 +440,15 @@ Proof.
   eapply get_tree_in_graph. apply H. apply H6.
   assert (G.contains_vertex g v = true). eapply get_tree_in_graph. apply H0. apply H7.
   assert (A :~S.In v t1 /\ ~S.In u t2). { split; intro;
-  pose proof (get_trees_partition_graph o g); unfold P.partition in H11;
+  pose proof (get_trees_partition_graph o g); unfold Pa.partition in H11;
   destruct_all; specialize (H12 t1 t2); destruct (S.equal t1 t2) eqn : ?.
   - apply S.equal_2 in Heqb; rewrite <- Heqb in H2.  assert (r1 = r2). { eapply F.tree_root_unique.
     apply H. apply H3. apply H4. apply H1. apply H2. } subst. omega.
-  - assert (P.disjoint t1 t2). apply H12. reflexivity. assumption. assumption. unfold P.disjoint in H13.
+  - assert (Pa.disjoint t1 t2). apply H12. reflexivity. assumption. assumption. unfold Pa.disjoint in H13.
     apply (H13 v). split; assumption.
   - apply S.equal_2 in Heqb; rewrite <- Heqb in H2.  assert (r1 = r2). { eapply F.tree_root_unique.
     apply H. apply H3. apply H4. apply H1. apply H2. } subst. omega.
-  - assert (P.disjoint t1 t2). apply H12. reflexivity. assumption. assumption. unfold P.disjoint in H13.
+  - assert (Pa.disjoint t1 t2). apply H12. reflexivity. assumption. assumption. unfold Pa.disjoint in H13.
     apply (H13 u). split; assumption. }
   assert (u <> v). { intro. subst. destruct_all. contradiction. }
   pose proof (D.parentheses_theorem o g u v H8 H9 H10). destruct H11.
@@ -531,15 +532,15 @@ Proof.
   assert (G.contains_vertex g v = true). eapply get_tree_in_graph. apply H0. assumption.
   assert (G.contains_vertex g u = true). eapply get_tree_in_graph. apply H. assumption.
   assert (A :~S.In v t1 /\ ~S.In u t2). { split; intro;
-  pose proof (get_trees_partition_graph o g); unfold P.partition in H13;
+  pose proof (get_trees_partition_graph o g); unfold Pa.partition in H13;
   destruct_all; specialize (H14 t1 t2); destruct (S.equal t1 t2) eqn : ?.
   - apply S.equal_2 in Heqb; rewrite <- Heqb in H2.  assert (r1 = r2). { eapply F.tree_root_unique.
     apply H. all: try assumption. }  subst. omega.
-  - assert (P.disjoint t1 t2). apply H14. reflexivity. assumption. assumption. unfold P.disjoint in H15.
+  - assert (Pa.disjoint t1 t2). apply H14. reflexivity. assumption. assumption. unfold Pa.disjoint in H15.
     apply (H15 v). split; assumption.
   - apply S.equal_2 in Heqb; rewrite <- Heqb in H2.  assert (r1 = r2). { eapply F.tree_root_unique.
     apply H. all: try assumption. }  subst. omega.
-  - assert (P.disjoint t1 t2). apply H14. reflexivity. assumption. assumption. unfold P.disjoint in H15.
+  - assert (Pa.disjoint t1 t2). apply H14. reflexivity. assumption. assumption. unfold Pa.disjoint in H15.
     apply (H15 u). split; assumption. } destruct A as [N1 N2].
   assert (N: u <> v). intro. subst. contradiction.
   rewrite P.path_path_list_rev in H8. destruct H8 as [l]. eapply P.path_no_dups in H8.
@@ -571,7 +572,7 @@ Proof.
         pose proof (D.parentheses_theorem o g u v H11 H10 N). omega. omega.
       * assert (G.contains_vertex g fst = true). eapply P.path_implies_in_graph.
         apply H8. apply H. pose proof (get_trees_partition_graph o g).
-        unfold P.partition in H16. destruct H16. specialize (H16 _ H0). destruct H16 as [t3].
+        unfold Pa.partition in H16. destruct H16. specialize (H16 _ H0). destruct H16 as [t3].
         destruct H16 as [R3 H16]. assert (A:= R3). eapply F.get_trees_root in A. destruct A as [r3].
         destruct H19 as [HR3 HI3]. destruct HI3 as [HI3 HD3].
         assert (D.f_time o g r3 > D.f_time o g r2 \/ D.f_time o g r3 = D.f_time o g r2 \/
@@ -604,7 +605,7 @@ Proof.
            ++ assert (r3 = r2). eapply D.f_times_unique. eapply get_tree_in_graph. apply R3. assumption.
               eapply get_tree_in_graph. apply R2. assumption. apply H19. subst.
               destruct (S.equal t2 t3) eqn : ?. apply S.equal_2 in Heqb. rewrite Heqb in n. contradiction.
-              apply H18 in Heqb. unfold P.disjoint in Heqb. apply (Heqb r2). split; assumption.
+              apply H18 in Heqb. unfold Pa.disjoint in Heqb. apply (Heqb r2). split; assumption.
               assumption. assumption.
            ++ assert (A:= H). eapply in_split_app_fst in A. destruct A as [l1]. destruct H20 as  [l2].
               destruct H20; subst. apply P.path_app in H8. destruct H8 as [HP1 HP2].
@@ -615,12 +616,12 @@ Proof.
               rewrite D.white_def. rewrite H8. rewrite Nat.ltb_lt. apply H17. simplify.
               intro. subst. contradiction. destruct (O.eq_dec fst r3). unfold O.eq in e. subst.
               rewrite <- HD3 in H8. destruct (S.equal t2 t3) eqn : ?. apply S.equal_2 in Heqb.
-              rewrite Heqb in n. contradiction. apply H18 in Heqb. unfold P.disjoint in Heqb.
+              rewrite Heqb in n. contradiction. apply H18 in Heqb. unfold Pa.disjoint in Heqb.
               apply (Heqb v). split; assumption. assumption. assumption. intro. subst. contradiction.
               assert (F.desc (D.dfs_forest o g) r3 v). eapply F.is_descendant_trans. apply (HD3 fst).
               auto. assumption. assumption. rewrite <- HD3 in H20. destruct (S.equal t2 t3) eqn : ?.
               apply S.equal_2 in Heqb. rewrite Heqb in n. contradiction. apply H18 in Heqb.
-              unfold P.disjoint in Heqb. apply (Heqb v). split; assumption. assumption. assumption.
+              unfold Pa.disjoint in Heqb. apply (Heqb v). split; assumption. assumption. assumption.
               intro. subst. apply F.desc_neq in H20. contradiction. apply O.eq_dec.
 Qed.
 Import SD.
@@ -724,7 +725,7 @@ End DerivedProofs.
 
 (*In particular, any implementation of [DFSWithCycleDetect] is correct*)
 
-Module CycleCorrect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)
+Module CycleCorrect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S)
   (D: DFSWithCycleDetect O S G F).
 
   Module A := (DerivedProofs O S G F D).
@@ -748,7 +749,7 @@ Module CycleCorrect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(
 End CycleCorrect.
 
 (* The same for [DFSWithTopologicalSort] *)
-Module TopoSortCorrect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)
+Module TopoSortCorrect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S)
   (D: DFSWithTopologicalSort O S G F).
 
   Module A := (DerivedProofs O S G F D).

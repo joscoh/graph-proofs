@@ -1,13 +1,17 @@
-Require Export Graph.
+(*Require Export Graph.*)
 Require Import Helper.
+Require Import Coq.Structures.OrderedTypeEx.
+Require Import Coq.Lists.SetoidList.
+Require Import Coq.Bool.Bool.
 
-Require Export Path.
+(*Require Export Path.*)
 Require Import Coq.Lists.List.
 (*TODO: maybe extend graph instead of providing function*)
 
-Module Type Forest(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
+Module Type Forest(O: UsualOrderedType)(S: FSetInterface.Sfun O).
 
-  Module P := (Path.PathTheories O S G).
+  (*Module P := (Path.PathTheories O S G).*)
+  Module P := Helper.Partition O S.
 
   Parameter forest : Type.
 
@@ -29,7 +33,7 @@ Module Type Forest(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
 
   (*Parameter get_children: forest -> vertex -> option (list vertex).*)
 
-  Parameter forest_to_graph: forest -> G.graph.
+  (*Parameter forest_to_graph: forest -> G.graph.*)
   (*Input: forest, ancestor, descendant*)
  (* Parameter is_descendant: forest -> vertex -> vertex -> bool.*)
 
@@ -167,14 +171,14 @@ Qed.
     get_children t u = Some l ->
     (is_child t u v = true <-> In v l).*)
 
-  Parameter tree_to_graph_1: forall t u,
+  (*Parameter tree_to_graph_1: forall t u,
     contains_vertex t u = true <-> G.contains_vertex (forest_to_graph t) u = true.
 
   Parameter tree_to_graph_2: forall t u v,
     is_child t u v = true <-> G.contains_edge (forest_to_graph t) u v = true.
 
   Parameter tree_to_graph_3: forall t,
-    P.acyclic (forest_to_graph t).
+    P.acyclic (forest_to_graph t).*)
 (*
   Parameter is_descendant_edge: forall t u v,
     is_child t u v = true ->
@@ -331,7 +335,7 @@ Proof.
   - apply IHdesc. apply H0. reflexivity.
 Qed.
 
-Lemma path_iff_desc: forall f u v,
+(*Lemma path_iff_desc: forall f u v,
   P.path (forest_to_graph f) u v <-> desc f u v.
 Proof.
   intros. split; intro H. remember (forest_to_graph f) as g. induction H; subst.
@@ -340,7 +344,7 @@ Proof.
   - induction H.
     + apply P.p_start. rewrite <- tree_to_graph_2. apply H.
     + eapply P.p_continue. apply IHdesc. rewrite <- tree_to_graph_2. apply H0.
-Qed.
+Qed.*)
 
 Import ListNotations.
 

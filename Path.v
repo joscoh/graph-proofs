@@ -411,15 +411,7 @@ Proof.
     + eapply path_trans. apply p_start. apply G.transpose_edges. apply H0. apply IHpath. reflexivity.
 Qed.
 
-(*Maybe not the best place to put this - TODO: see about this*)
-(*A partition of a graph is a list of sets of vertices such that each vertex is in a set and for any two
-  nonequal sets, they have no vertices in common*)
-Definition disjoint s s' :=
-  forall v, ~(S.In v s /\ S.In v s').
 
-Definition partition {A: Type} (f: A -> O.t -> bool) (x: A) (l: list (S.t)) :=
-  (forall v, f x v = true -> exists s, InA S.Equal s l /\ S.In v s) /\
-  (forall s s', S.equal s s' = false -> InA S.Equal s l -> InA S.Equal s' l-> disjoint s s').
   
 
 

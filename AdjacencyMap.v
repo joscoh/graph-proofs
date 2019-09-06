@@ -482,4 +482,6 @@ Qed.
     intros. unfold topological_sort. reflexivity.
   Qed.
 
+  Definition undirected (g: graph) := forall u v, contains_edge g u v = true <-> contains_edge g v u = true. 
+
 End AdjacencyMap. 

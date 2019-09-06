@@ -21,7 +21,7 @@ Require Import DerivedProofs.
   track of the vertices not yet seen), Map (for storing discover/finish times), and UsualOrderedType
   (for the vertices). Also, we could use different sets for the Graph and Tree instances.*)
 Module DFSCycle (O: UsualOrderedType)(M: FMapInterface.Sfun O) (S St: FSetInterface.Sfun O) (G: Graph O S)
-            (F: Forest O S G).
+            (F: Forest O S).
 
 Module P := FMapFacts.WProperties_fun O M.
 Module P2 := FSetProperties.WProperties_fun O S.

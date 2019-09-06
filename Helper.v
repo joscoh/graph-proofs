@@ -425,6 +425,22 @@ Qed.
 
 End MinMax.
 
+(*Definitions of a partition of a set and disjoint sets*)
+Module Partition(O:UsualOrderedType)(S: FSetInterface.Sfun O).
+
+(*Two sets are disjoint if there is no vertex in both*)
+Definition disjoint s s' :=
+  forall v, ~(S.In v s /\ S.In v s').
+
+(*For ease with graph/forests, we define the partition of all items satisfying a function (can be
+  \x y -> true to use all instances of type O.t). A partition is defined as a list of pairwise
+  disjoint sets such that every vertex satsifying f is in a set *)
+Definition partition {A: Type} (f: A -> O.t -> bool) (x: A) (l: list (S.t)) :=
+  (forall v, f x v = true -> exists s, InA S.Equal s l /\ S.In v s) /\
+  (forall s s', S.equal s s' = false -> InA S.Equal s l -> InA S.Equal s' l-> disjoint s s').
+
+End Partition.
+
 
 
 

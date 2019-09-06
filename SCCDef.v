@@ -13,6 +13,7 @@ Require Import Coq.Program.Wf.
 (*Contains the definition of an SCC and general facts about strong connectivity and SCCs*)
 Module SCCDef(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S).
 
+  Module P := (Helper.Partition O S).
   Module Pa := (Path.PathTheories O S G).
   Module P2 := FSetProperties.WProperties_fun O S.
   Module O2 := OrderedTypeFacts O.
@@ -648,7 +649,7 @@ Proof.
 Qed.
 
 Lemma path_disjoint_boundary: forall S S' u v l p g,
-  Pa.partition G.contains_vertex g l ->
+  P.partition G.contains_vertex g l ->
   InA S.Equal S l ->
   InA S.Equal S' l ->
   S.equal S S' = false ->
@@ -660,7 +661,7 @@ Lemma path_disjoint_boundary: forall S S' u v l p g,
 Proof.
   intros. generalize dependent v. generalize dependent S'. induction p; intros.
   - simpl in H5. exists u. exists v. exists S'. simplify.
-  - simpl in H5. simplify. unfold Pa.partition in H. destruct H.
+  - simpl in H5. simplify. unfold P.partition in H. destruct H.
     assert (A:= H). specialize (A a). assert ( exists s : S.t, InA S.Equal s l /\ S.In a s).
     apply A. eapply G.contains_edge_1. apply H6. destruct_all. destruct (S.equal x S) eqn : ?.
     + apply S.equal_2 in Heqb. exists a. exists v. exists S'.  simplify. setoid_rewrite <- Heqb. apply H9.
@@ -671,7 +672,7 @@ Proof.
 Qed.
 
 Lemma path_disjoint_boundary_back: forall S S' u v l p g,
-  Pa.partition G.contains_vertex g l ->
+  P.partition G.contains_vertex g l ->
   InA S.Equal S l ->
   InA S.Equal S' l ->
   S.equal S S' = false ->
@@ -683,7 +684,7 @@ Lemma path_disjoint_boundary_back: forall S S' u v l p g,
 Proof.
   intros. generalize dependent u. induction p; intros.
   - simpl in H5. exists u. exists v. exists S'. simplify.
-  - simpl in H5. simplify. unfold Pa.partition in H. destruct H.
+  - simpl in H5. simplify. unfold P.partition in H. destruct H.
     assert (A:= H). specialize (A a). assert ( exists s : S.t, InA S.Equal s l /\ S.In a s).
     apply A. eapply G.contains_edge_1. apply H6. destruct_all. destruct (S.equal x S) eqn : ?.
     + apply S.equal_2 in Heqb. rewrite Heqb in H9. specialize (IHp a H9 H7). destruct_all.
@@ -700,7 +701,7 @@ Qed.
 
 Lemma scc_partition_1: forall g C v s l,
   scc C g ->
-  Pa.partition G.contains_vertex g l ->
+  P.partition G.contains_vertex g l ->
   InA S.Equal s l ->
   S.In v C ->
   S.In v s ->
@@ -724,7 +725,7 @@ Qed.
 
 Lemma scc_partition_2: forall g C v s l,
   scc C g ->
-  Pa.partition G.contains_vertex g l ->
+  P.partition G.contains_vertex g l ->
   InA S.Equal s l ->
   S.In v C ->
   S.In v s ->

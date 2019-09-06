@@ -1,6 +1,7 @@
 -Q . ""
 Helper.v
 Graph.v
+AdjacencyMap.v
 Path.v
 SCCDef.v
 Forest.v
@@ -11,3 +12,5 @@ DFS.v
 DFSCycle.v
 DFSTopoSort.v
 DFSOrder.v
+Queue.v
+

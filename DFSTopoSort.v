@@ -18,7 +18,7 @@ Require Import DFS.
 Require Import DerivedProofs.
 
 Module DFSTopoSort (O: UsualOrderedType)(M: FMapInterface.Sfun O) (S St: FSetInterface.Sfun O) (G: Graph O S)
-            (F: Forest O S G).
+            (F: Forest O S).
 
 Module P := FMapFacts.WProperties_fun O M.
 Module P2 := FSetProperties.WProperties_fun O S.

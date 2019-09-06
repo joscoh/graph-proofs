@@ -13,10 +13,10 @@ Require Import DerivedProofs.
 Require Import SCCDef.
 Require Import Coq.Classes.RelationClasses.
 
-Module SCCAlg(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G)(D: DFSBase)
+Module SCCAlg(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S)(D: DFSBase)
   (D' : DFSCustomOrder).
 
-  
+  Module P := Helper.Partition O S.
   Module P2 := FSetProperties.WProperties_fun O S.
   Module O2 := OrderedTypeFacts O.
   Module SN := Helper.SetNeq O S.
@@ -391,9 +391,9 @@ Proof.
 Qed.
 
 Lemma get_trees_partition_graph : forall g lt H o,
-  Pa.partition G.contains_vertex g (F.get_trees (D2.dfs_forest g lt H o)). 
+  P.partition G.contains_vertex g (F.get_trees (D2.dfs_forest g lt H o)). 
 Proof.
-  intros. unfold Pa.partition. pose proof (F.get_trees_partition (D2.dfs_forest g lt0 H o)).
+  intros. unfold P.partition. pose proof (F.get_trees_partition (D2.dfs_forest g lt0 H o)).
   unfold F.P.partition in H0. destruct_all. split. intros. apply H0.
   apply D2.same_vertices. apply H2. apply H1.
 Qed.
@@ -467,15 +467,15 @@ Proof.
   eapply get_tree_in_graph. apply H0. apply H7.
   assert (G.contains_vertex g v = true). eapply get_tree_in_graph. apply H1. apply H8.
   assert (A :~S.In v t1 /\ ~S.In u t2). { split; intro;
-  pose proof (get_trees_partition_graph g lt0 H o); unfold Pa.partition in H12;
+  pose proof (get_trees_partition_graph g lt0 H o); unfold P.partition in H12;
   destruct_all; specialize (H13 t1 t2); destruct (S.equal t1 t2) eqn : ?.
   - apply S.equal_2 in Heqb; rewrite <- Heqb in H3.  assert (r1 = r2). { eapply F.tree_root_unique.
     apply H0. apply H4. apply H5. apply H2. apply H3. } subst. omega.
-  - assert (Pa.disjoint t1 t2). apply H13. reflexivity. assumption. assumption. unfold Pa.disjoint in H14.
+  - assert (P.disjoint t1 t2). apply H13. reflexivity. assumption. assumption. unfold P.disjoint in H14.
     apply (H14 v). split; assumption.
   - apply S.equal_2 in Heqb; rewrite <- Heqb in H3.  assert (r1 = r2). { eapply F.tree_root_unique.
     apply H0. apply H4. apply H5. apply H2. apply H3. } subst. omega.
-  - assert (Pa.disjoint t1 t2). apply H13. reflexivity. assumption. assumption. unfold Pa.disjoint in H14.
+  - assert (P.disjoint t1 t2). apply H13. reflexivity. assumption. assumption. unfold P.disjoint in H14.
     apply (H14 u). split; assumption. }
   assert (u <> v). { intro. subst. destruct_all. contradiction. }
   pose proof (D2.parentheses_theorem g lt0 H o u v H9 H10 H11). destruct H12.
@@ -560,15 +560,15 @@ Proof.
   assert (G.contains_vertex g v = true). eapply get_tree_in_graph. apply H1. assumption.
   assert (G.contains_vertex g u = true). eapply get_tree_in_graph. apply H0. assumption.
   assert (A :~S.In v t1 /\ ~S.In u t2). { split; intro;
-  pose proof (get_trees_partition_graph g lt0 H None); unfold Pa.partition in H14;
+  pose proof (get_trees_partition_graph g lt0 H None); unfold P.partition in H14;
   destruct_all; specialize (H15 t1 t2); destruct (S.equal t1 t2) eqn : ?.
   - apply S.equal_2 in Heqb; rewrite <- Heqb in H3.  assert (r1 = r2). { eapply F.tree_root_unique.
     apply H0. all: try assumption. }  subst. omega.
-  - assert (Pa.disjoint t1 t2). apply H15. reflexivity. assumption. assumption. unfold Pa.disjoint in H16.
+  - assert (P.disjoint t1 t2). apply H15. reflexivity. assumption. assumption. unfold P.disjoint in H16.
     apply (H16 v). split; assumption.
   - apply S.equal_2 in Heqb; rewrite <- Heqb in H3.  assert (r1 = r2). { eapply F.tree_root_unique.
     apply H0. all: try assumption. }  subst. omega.
-  - assert (Pa.disjoint t1 t2). apply H15. reflexivity. assumption. assumption. unfold Pa.disjoint in H16.
+  - assert (P.disjoint t1 t2). apply H15. reflexivity. assumption. assumption. unfold P.disjoint in H16.
     apply (H16 u). split; assumption. } destruct A as [N1 N2].
   assert (N: u <> v). intro. subst. contradiction.
   rewrite Pa.path_path_list_rev in H9. destruct H9 as [l]. eapply Pa.path_no_dups in H9.
@@ -600,7 +600,7 @@ Proof.
         pose proof (D2.parentheses_theorem g lt0 H None u v H12 H11 N). omega. omega.
       * assert (G.contains_vertex g fst = true). eapply Pa.path_implies_in_graph.
         apply H9. apply H0. pose proof (get_trees_partition_graph g lt0 H None).
-        unfold Pa.partition in H17. destruct H17. specialize (H17 _ H1). destruct H17 as [t3].
+        unfold P.partition in H17. destruct H17. specialize (H17 _ H1). destruct H17 as [t3].
         destruct H17 as [R3 H17]. assert (A:= R3). eapply F.get_trees_root in A. destruct A as [r3].
         destruct H20 as [HR3 HI3]. destruct HI3 as [HI3 HD3].
         assert (D2.f_time g lt0 H None r3 > D2.f_time g lt0 H None r2 \/ 
@@ -634,7 +634,7 @@ Proof.
            ++ assert (r3 = r2). eapply D2.f_times_unique. eapply get_tree_in_graph. apply R3. assumption.
               eapply get_tree_in_graph. apply R2. assumption. apply H20. subst.
               destruct (S.equal t2 t3) eqn : ?. apply S.equal_2 in Heqb. rewrite Heqb in n. contradiction.
-              apply H19 in Heqb. unfold Pa.disjoint in Heqb. apply (Heqb r2). split; assumption.
+              apply H19 in Heqb. unfold P.disjoint in Heqb. apply (Heqb r2). split; assumption.
               assumption. assumption.
            ++ assert (A:= H0). eapply in_split_app_fst in A. destruct A as [l1]. destruct H21 as  [l2].
               destruct H21; subst. apply Pa.path_app in H9. destruct H9 as [HP1 HP2].
@@ -645,12 +645,12 @@ Proof.
               rewrite D2.white_def. rewrite H9. rewrite Nat.ltb_lt. apply H18. simplify.
               intro. subst. contradiction. destruct (O.eq_dec fst r3). unfold O.eq in e. subst.
               rewrite <- HD3 in H9. destruct (S.equal t2 t3) eqn : ?. apply S.equal_2 in Heqb.
-              rewrite Heqb in n. contradiction. apply H19 in Heqb. unfold Pa.disjoint in Heqb.
+              rewrite Heqb in n. contradiction. apply H19 in Heqb. unfold P.disjoint in Heqb.
               apply (Heqb v). split; assumption. assumption. assumption. intro. subst. contradiction.
               assert (F.desc (D2.dfs_forest g lt0 H None) r3 v). eapply F.is_descendant_trans. apply (HD3 fst).
               auto. assumption. assumption. rewrite <- HD3 in H21. destruct (S.equal t2 t3) eqn : ?.
               apply S.equal_2 in Heqb. rewrite Heqb in n. contradiction. apply H19 in Heqb.
-              unfold Pa.disjoint in Heqb. apply (Heqb v). split; assumption. assumption. assumption.
+              unfold P.disjoint in Heqb. apply (Heqb v). split; assumption. assumption. assumption.
               intro. subst. apply F.desc_neq in H21. contradiction. apply O.eq_dec.
 Qed.
 
@@ -670,8 +670,8 @@ Proof.
           D2.f_time g lt0 Ho None r1 = D2.f_time g lt0 Ho None r2 \/
           D2.f_time g lt0 Ho None r1 > D2.f_time g lt0 Ho None r2) by omega.
   assert (S := H2). unfold scc in H2. destruct H2. unfold strongly_connected in H2. destruct_all.
-  assert (a <> b). { intro. subst. unfold Pa.partition in H4. destruct_all. apply H20 in H5.
-  unfold Pa.disjoint in H5. apply (H5 b). split; assumption. all: try assumption. }
+  assert (a <> b). { intro. subst. unfold P.partition in H4. destruct_all. apply H20 in H5.
+  unfold P.disjoint in H5. apply (H5 b). split; assumption. all: try assumption. }
   destruct H16.
   - assert (Pa.path g a b). apply H19. all: try assumption. exfalso. eapply no_path_to_later_tree.
     apply P1. apply P2. apply H14. apply H12. assumption. assumption. assumption. apply H9.
@@ -679,7 +679,7 @@ Proof.
   - destruct H16.
     + assert (r1 = r2). eapply D2.f_times_unique. eapply get_tree_in_graph. apply P1. assumption.
       eapply get_tree_in_graph. apply P2. assumption. apply H16. subst.
-      unfold Pa.partition in H4. destruct H4. apply H21 in H5. unfold Pa.disjoint in H5.
+      unfold P.partition in H4. destruct H4. apply H21 in H5. unfold P.disjoint in H5.
       specialize (H5 r2). exfalso. apply H5. split; assumption. all: try assumption.
     + exfalso. eapply no_path_to_later_tree. apply P2. apply P1. apply H12. apply H14.
       assumption. assumption. omega. apply H10. apply H9. constructor. apply H11.
@@ -763,14 +763,14 @@ Proof.
   intros. rewrite scc_transpose. assert (A:= H). apply all_trees_strongly_connected in H.
   destruct (scc_dec t gt). apply s. pose proof (non_scc_has_another t gt H n).
   destruct H0 as [v]. destruct H0. assert (R:= A). apply F.get_trees_root in A. destruct A as [r1].
-  destruct_all. pose proof (get_trees_partition_graph gt lt (reverseF g') None). unfold Pa.partition in H5.
+  destruct_all. pose proof (get_trees_partition_graph gt lt (reverseF g') None). unfold P.partition in H5.
   destruct H5. assert (G.contains_vertex gt v = true). { unfold strongly_connected in H1. apply H1.
   apply S.add_1. reflexivity. } specialize (H5 _ H7). destruct H5 as [t2]. destruct H5.
   assert (R2 := H5). apply F.get_trees_root in H5. destruct H5 as [r2]. destruct_all.
   unfold strongly_connected in H1. destruct_all.
   assert (r1 <> v). intro. subst. pose proof (get_trees_partition_graph gt lt (reverseF g') None).
-  unfold Pa.partition in H13. destruct H13. destruct (S.equal t t2) eqn : ?. apply S.equal_2 in Heqb.
-  rewrite Heqb in H0. contradiction. apply H14 in Heqb. unfold Pa.disjoint in Heqb.
+  unfold P.partition in H13. destruct H13. destruct (S.equal t t2) eqn : ?. apply S.equal_2 in Heqb.
+  rewrite Heqb in H0. contradiction. apply H14 in Heqb. unfold P.disjoint in Heqb.
   apply (Heqb v). split; assumption. assumption. assumption.
   assert (Pa.path gt r1 v). apply H12. apply S.add_2. assumption. apply S.add_1. reflexivity. apply H13.
   assert (Pa.path gt v r1). apply H12. apply S.add_1. reflexivity. apply S.add_2. assumption. auto.  
@@ -784,8 +784,8 @@ Proof.
     + assert (r1 = r2). eapply D2.f_times_unique. eapply get_tree_in_graph. apply R.
       assumption. eapply get_tree_in_graph. apply R2. assumption. apply H16. subst.
       pose proof (get_trees_partition_graph gt lt (reverseF g') None).
-      unfold Pa.partition in H17. destruct H17. destruct (S.equal t t2) eqn : ?. apply S.equal_2 in Heqb.
-      rewrite Heqb in H0. contradiction. apply H18 in Heqb. unfold Pa.disjoint in Heqb.
+      unfold P.partition in H17. destruct H17. destruct (S.equal t t2) eqn : ?. apply S.equal_2 in Heqb.
+      rewrite Heqb in H0. contradiction. apply H18 in Heqb. unfold P.disjoint in Heqb.
       exfalso. apply (Heqb r2). split; assumption. all: try assumption.
     + exfalso. eapply no_path_to_later_tree. apply R2. apply R. apply H9. apply H3. assumption.
       assumption. assumption. apply H8. apply H3. apply H15.

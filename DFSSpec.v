@@ -5,7 +5,7 @@ Require Import Forest.
 Require Import Path.
 Require Import Coq.Init.Nat.
 
-Module Type DFSBase (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G).
+Module Type DFSBase (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S).
 
   Module P := (Path.PathTheories O S G).
 
@@ -136,7 +136,7 @@ Module Type DFSBase (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)
 End DFSBase.
  
 
-Module Type DFSWithCycleDetect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G).
+Module Type DFSWithCycleDetect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S).
   Include (DFSBase O S G F).
 
   Parameter cycle_detect: option G.vertex -> G.graph -> bool.
@@ -146,7 +146,7 @@ Module Type DFSWithCycleDetect(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: 
 
 End DFSWithCycleDetect.
 
-Module Type DFSWithTopologicalSort(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G).
+Module Type DFSWithTopologicalSort(O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S).
   Include (DFSBase O S G F).
 
   (*We have an additional function that produces a list of vertices reverse sorted by finish time*)
@@ -158,7 +158,7 @@ Module Type DFSWithTopologicalSort(O: UsualOrderedType)(S: FSetInterface.Sfun O)
 
 End DFSWithTopologicalSort.
 
-Module Type DFSCustomOrder (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S G).
+Module Type DFSCustomOrder (O: UsualOrderedType)(S: FSetInterface.Sfun O)(G: Graph O S)(F: Forest O S).
 
   Module P := (Path.PathTheories O S G).
   Module G' := (Graph.GraphOrder O S G).
