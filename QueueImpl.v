@@ -2,7 +2,7 @@ Require Import Queue.
 Require Import Coq.Structures.Equalities.
 Require Import Lists.List.
 
-Module QueueImpl(T: DecidableType) <: Queue.
+Module QueueImpl(T: Typ) <: Queue.
 
   Definition queue : Type := (list T.t * list T.t).
   Definition t : Type := T.t.
